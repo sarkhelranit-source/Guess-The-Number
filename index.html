@@ -81,12 +81,20 @@
         function startGame() {
             let turns = [], playerNames = [], drawIndex = [], tiedNames = [];
             let playerDict = {};
-            let turn = 0, superTurn = 0, draw = 0;
+            let turn = 0, superTurn = 0, draw = 0, count = 0;
 
             let players = parseInt(prompt("How many players are there: "));
-            for (let i = 0; i < players; i++) {
-                let names = prompt(`Name of player ${i + 1}: `);
-                playerNames.push(names);
+
+            while (count < players) {
+
+                let names = prompt(`Name of player ${count + 1}: `);
+                if (names == "") {
+                    alert("Player name cannot be empty");
+                }
+                else {
+                    playerNames.push(names);
+                    count++;
+                }
             }
 
             while (superTurn < players) {
@@ -98,6 +106,8 @@
                         alert("Try something bigger");
                     } else if (num > randomNumber) {
                         alert("Try something smaller");
+                    } else if (isNaN(num)) {
+                        alert("Don't leave it blank");
                     } else {
                         alert(`You took ${turn} turns to guess it. Great job!!`);
                         turns.push(turn);
