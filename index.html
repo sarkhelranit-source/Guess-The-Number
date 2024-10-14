@@ -76,6 +76,8 @@
     <div class="container">
         <button class="button" onclick="startGame()"><b>Start Game</b></button>
     </div>
+    <br>
+    <h2 id="result" align="center"></h2>
 
     <script>
         function startGame() {
@@ -128,14 +130,16 @@
                 }
             }
 
+            let resultText = '';
             if (draw > 1) {
                 for (let i = 0; i < drawIndex.length; i++) {
                     tiedNames.push(playerNames[drawIndex[i]]);
                 }
-                alert(`The match is tied between ${tiedNames.join(", ")}`);
+                resultText = `The match is tied between ${tiedNames.join(", ")}`;
             } else {
-                alert(`The WINNER is ${playerDict[Math.min(...turns)]}`);
+                resultText = `The WINNER is ${playerDict[Math.min(...turns)]}`;
             }
+            document.getElementById('result').innerText = resultText;
         }
 
     </script>
