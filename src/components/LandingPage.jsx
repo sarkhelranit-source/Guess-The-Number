@@ -1,9 +1,12 @@
-import { useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 
-export default function LandingPage({ onStart }) {
+export default function LandingPage({ onCreateRoom, onJoinRoom }) {
   const containerRef = useRef(null);
+  const [mode, setMode] = useState('menu'); // 'menu', 'create', 'join'
+  const [nickname, setNickname] = useState('');
+  const [roomId, setRoomId] = useState('');
 
   useEffect(() => {
     // GSAP Floating Numbers Background
@@ -48,34 +51,85 @@ export default function LandingPage({ onStart }) {
       <div ref={containerRef} className="absolute inset-0 z-0 overflow-hidden pointer-events-none"></div>
 
       <motion.div 
-        className="glass-panel z-10 flex flex-col items-center max-w-2xl text-center"
+        className="glass-panel z-10 flex flex-col items-center max-w-2xl text-center p-10"
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
       >
         <motion.h1 
-          className="text-6xl md:text-8xl font-playfair font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-primary to-brand-secondary mb-6"
+          className="text-5xl md:text-7xl font-playfair font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-primary to-brand-secondary mb-6"
           initial={{ scale: 0.8 }}
           animate={{ scale: 1 }}
           transition={{ duration: 1, ease: "backOut", delay: 0.2 }}
         >
           Guess The Number
         </motion.h1>
-        
-        <p className="text-xl text-gray-300 mb-10 font-lora">
-          A thrilling multiplayer challenge of deduction and intuition. 
-          Who will find the hidden number first?
-        </p>
 
-        <motion.button 
-          className="primary-btn text-xl px-12 py-4"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={onStart}
-        >
-          Play Now
-        </motion.button>
+        <AnimatePresence mode="wait">
+          {mode === 'menu' && (
+            <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-4 w-full mt-8">
+              <button className="primary-btn text-xl px-12 py-4" onClick={() => setMode('create')}>
+                Create New Room
+              </button>
+              <button className="secondary-btn text-xl px-12 py-4 border border-brand-primary text-brand-primary hover:bg-brand-primary/10 transition-colors rounded-lg" onClick={() => setMode('join')}>
+                Join Existing Room
+              </button>
+            </motion.div>
+          )}
+
+          {mode === 'create' && (
+            <motion.div key="create" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="flex flex-col gap-4 w-full mt-8">
+              <input 
+                type="text" 
+                placeholder="Enter your Nickname" 
+                className="input-field text-center text-xl bg-dark-bg/50 border border-brand-primary/30 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-brand-primary transition-colors"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+              />
+              <div className="flex gap-4 mt-2">
+                <button className="secondary-btn flex-1 py-3 border border-gray-600 text-gray-300 hover:bg-gray-800 transition-colors rounded-lg" onClick={() => setMode('menu')}>Back</button>
+                <button 
+                  className="primary-btn flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed" 
+                  onClick={() => nickname && onCreateRoom(nickname)}
+                  disabled={!nickname}
+                >
+                  Create
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {mode === 'join' && (
+            <motion.div key="join" initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }} className="flex flex-col gap-4 w-full mt-8">
+              <input 
+                type="text" 
+                placeholder="Enter your Nickname" 
+                className="input-field text-center text-xl bg-dark-bg/50 border border-brand-primary/30 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-brand-primary transition-colors"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+              />
+              <input 
+                type="text" 
+                placeholder="Room Code (e.g. ABCD)" 
+                className="input-field text-center text-xl uppercase tracking-widest font-bold bg-dark-bg/50 border border-brand-primary/30 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-brand-primary transition-colors"
+                value={roomId}
+                maxLength={4}
+                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+              />
+              <div className="flex gap-4 mt-2">
+                <button className="secondary-btn flex-1 py-3 border border-gray-600 text-gray-300 hover:bg-gray-800 transition-colors rounded-lg" onClick={() => setMode('menu')}>Back</button>
+                <button 
+                  className="primary-btn flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed" 
+                  onClick={() => nickname && roomId.length === 4 && onJoinRoom(nickname, roomId)}
+                  disabled={!nickname || roomId.length !== 4}
+                >
+                  Join
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );
