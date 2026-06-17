@@ -1,7 +1,14 @@
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 
-export default function ResultPhase({ winner, myNickname, onBackToLobby }) {
+export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, onBackToRoom }) {
   const isWinner = winner === myNickname;
+  const [waitingForHost, setWaitingForHost] = useState(false);
+
+  const handlePlayAgain = () => {
+    onPlayAgain();
+    if (!isHost) setWaitingForHost(true);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -28,9 +35,21 @@ export default function ResultPhase({ winner, myNickname, onBackToLobby }) {
               : `Better luck next time! ${winner} was just a little bit faster this round.`}
           </p>
 
-          <button onClick={onBackToLobby} className="primary-btn py-4 px-12 text-lg">
-            Back to Home
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button 
+              onClick={handlePlayAgain} 
+              disabled={waitingForHost}
+              className={`primary-btn py-4 px-8 text-lg ${waitingForHost ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {waitingForHost ? "Waiting for Host..." : "Play Again"}
+            </button>
+            <button 
+              onClick={onBackToRoom} 
+              className="py-4 px-8 text-lg border border-white/20 hover:bg-white/10 rounded-lg font-bold transition-all text-white"
+            >
+              Back to Room
+            </button>
+          </div>
         </motion.div>
       </motion.div>
     </div>

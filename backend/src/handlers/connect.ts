@@ -1,14 +1,18 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE_NAME!;
+const GAMES_TABLE = process.env.GAMES_TABLE_NAME!;
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   const connectionId = event.requestContext.connectionId;
   const eventType = event.requestContext.eventType;
+  const endpoint = `https://${event.requestContext.domainName}/${event.requestContext.stage}`;
+  const apiGateway = new ApiGatewayManagementApiClient({ endpoint });
 
   if (!connectionId) return { statusCode: 400, body: 'Missing connectionId' };
 
@@ -21,11 +25,53 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       }));
     } else if (eventType === 'DISCONNECT') {
       console.log('Client disconnected:', connectionId);
+      
+      const { Item: connection } = await docClient.send(new GetCommand({
+        TableName: CONNECTIONS_TABLE,
+        Key: { connectionId }
+      }));
+
+      if (connection && connection.roomId) {
+        const roomId = connection.roomId;
+        const { Item: room } = await docClient.send(new GetCommand({
+          TableName: GAMES_TABLE,
+          Key: { roomId }
+        }));
+
+        if (room) {
+          const leavingPlayer = room.players.find((p: any) => p.connectionId === connectionId);
+          room.players = room.players.filter((p: any) => p.connectionId !== connectionId);
+
+          if (room.players.length === 0) {
+            await docClient.send(new DeleteCommand({
+              TableName: GAMES_TABLE,
+              Key: { roomId }
+            }));
+          } else {
+            if (room.hostId === connectionId) {
+              room.hostId = room.players[0].connectionId;
+            }
+
+            await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+
+            for (const p of room.players) {
+              try {
+                await apiGateway.send(new PostToConnectionCommand({
+                  ConnectionId: p.connectionId,
+                  Data: Buffer.from(JSON.stringify({ type: 'playerLeft', room, leftPlayer: leavingPlayer?.name }))
+                }));
+              } catch (e) {
+                // Ignore stale connection errors
+              }
+            }
+          }
+        }
+      }
+
       await docClient.send(new DeleteCommand({
         TableName: CONNECTIONS_TABLE,
         Key: { connectionId }
       }));
-      // Note: We should ideally remove the player from any active rooms here too.
     }
     return { statusCode: 200, body: 'Success' };
   } catch (error) {

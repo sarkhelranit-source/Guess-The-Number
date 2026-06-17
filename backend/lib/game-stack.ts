@@ -30,6 +30,7 @@ export class GameStack extends cdk.Stack {
       runtime: new lambda.Runtime('nodejs24.x'),
       environment: {
         CONNECTIONS_TABLE_NAME: connectionsTable.tableName,
+        GAMES_TABLE_NAME: gamesTable.tableName,
       },
     });
 
@@ -44,6 +45,7 @@ export class GameStack extends cdk.Stack {
 
     // Grant DynamoDB Permissions to Lambdas
     connectionsTable.grantReadWriteData(connectHandler);
+    gamesTable.grantReadWriteData(connectHandler);
     connectionsTable.grantReadWriteData(gameLogicHandler);
     gamesTable.grantReadWriteData(gameLogicHandler);
 

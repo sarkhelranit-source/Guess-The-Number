@@ -17,6 +17,9 @@ function App() {
   const [winner, setWinner] = useState('');
   const [lastHint, setLastHint] = useState('');
   const [selectedMode, setSelectedMode] = useState(''); // track mode selected by host
+  const [toastMessage, setToastMessage] = useState('');
+
+  const isHost = gameState?.players?.[0]?.name === nickname;
 
   useEffect(() => {
     const unsubCreated = wsService.on('roomCreated', (data) => {
@@ -51,6 +54,22 @@ function App() {
       setPhase('result');
     });
 
+    const unsubRematch = wsService.on('rematchRequested', (data) => {
+      setToastMessage(`${data.playerName} wants a rematch!`);
+      setTimeout(() => setToastMessage(''), 3000);
+    });
+
+    const unsubReturnedToLobby = wsService.on('returnedToLobby', (data) => {
+      setGameState(data.room);
+      setPhase('lobby');
+    });
+
+    const unsubPlayerLeft = wsService.on('playerLeft', (data) => {
+      setGameState(data.room);
+      setToastMessage(`${data.leftPlayer} left the room.`);
+      setTimeout(() => setToastMessage(''), 3000);
+    });
+
     const unsubError = wsService.on('error', (data) => {
       setError(data.message);
     });
@@ -62,6 +81,9 @@ function App() {
       unsubUpdated();
       unsubHint();
       unsubOver();
+      unsubRematch();
+      unsubReturnedToLobby();
+      unsubPlayerLeft();
       unsubError();
     };
   }, [phase]);
@@ -104,12 +126,26 @@ function App() {
     setGameState(null);
   };
 
+  const handleBackToRoom = () => {
+    if (isHost) {
+      wsService.send({ action: 'returnToLobby', roomId });
+    } else {
+      setPhase('lobby');
+    }
+  };
+
+  const handlePlayAgain = () => {
+    if (isHost) {
+      handleStartGame();
+    } else {
+      wsService.send({ action: 'rematchRequest', roomId, playerName: nickname });
+    }
+  };
+
   const handleGuess = (guess) => {
     setLastHint(''); // reset hint while waiting for server response
     wsService.send({ action: 'guess', roomId, guess: guess.toString() });
   };
-
-  const isHost = gameState?.players?.[0]?.name === nickname;
 
   return (
     <div className="relative min-h-screen bg-dark-bg text-white overflow-hidden">
@@ -118,6 +154,17 @@ function App() {
           {error}
           <button onClick={() => setError('')} className="ml-4 opacity-50 hover:opacity-100 font-bold text-xl">×</button>
         </div>
+      )}
+
+      {toastMessage && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          exit={{ opacity: 0, y: -20 }}
+          className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-brand-primary/90 text-white px-6 py-3 rounded-lg shadow-lg font-bold flex items-center"
+        >
+          {toastMessage}
+        </motion.div>
       )}
 
       <AnimatePresence mode="wait">
@@ -157,7 +204,9 @@ function App() {
             <ResultPhase 
               winner={winner}
               myNickname={nickname}
-              onBackToLobby={handleLeaveRoom}
+              isHost={isHost}
+              onPlayAgain={handlePlayAgain}
+              onBackToRoom={handleBackToRoom}
             />
           </motion.div>
         )}

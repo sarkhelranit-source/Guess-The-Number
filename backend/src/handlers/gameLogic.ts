@@ -91,12 +91,36 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       room.messages = [];
 
       // Assign target numbers
-      room.players.forEach((p: any) => p.target = Math.floor(Math.random() * 100) + 1);
+      const commonTarget = Math.floor(Math.random() * 100) + 1;
+      room.players.forEach((p: any) => p.target = commonTarget);
 
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
       for (const p of room.players) {
         await sendMessage(p.connectionId, { type: 'gameStarted', room });
+      }
+
+    } else if (action === 'returnToLobby') {
+      const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
+      if (!room || room.hostId !== connectionId) throw new Error('Unauthorized');
+
+      room.status = 'waiting';
+      delete room.winner;
+      room.messages = [];
+
+      await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+
+      for (const p of room.players) {
+        await sendMessage(p.connectionId, { type: 'returnedToLobby', room });
+      }
+
+    } else if (action === 'rematchRequest') {
+      const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
+      if (!room) throw new Error('Room not found');
+
+      const host = room.players.find((p: any) => p.connectionId === room.hostId);
+      if (host) {
+        await sendMessage(host.connectionId, { type: 'rematchRequested', playerName });
       }
 
     } else if (action === 'guess') {

@@ -82,13 +82,39 @@ export const handler = async (event) => {
       if (!room || room.hostId !== connectionId) throw new Error('Unauthorized');
 
       room.status = 'playing';
-      room.players.forEach((p) => p.target = Math.floor(Math.random() * 100) + 1);
+      if (gameMode) room.gameMode = gameMode;
       room.currentTurnIndex = 0;
+      room.messages = [];
+      const commonTarget = Math.floor(Math.random() * 100) + 1;
+      room.players.forEach((p) => p.target = commonTarget);
 
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
       for (const p of room.players) {
         await sendMessage(p.connectionId, { type: 'gameStarted', room });
+      }
+
+    } else if (action === 'returnToLobby') {
+      const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
+      if (!room || room.hostId !== connectionId) throw new Error('Unauthorized');
+
+      room.status = 'waiting';
+      delete room.winner;
+      room.messages = [];
+
+      await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+
+      for (const p of room.players) {
+        await sendMessage(p.connectionId, { type: 'returnedToLobby', room });
+      }
+
+    } else if (action === 'rematchRequest') {
+      const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
+      if (!room) throw new Error('Room not found');
+
+      const host = room.players.find((p) => p.connectionId === room.hostId);
+      if (host) {
+        await sendMessage(host.connectionId, { type: 'rematchRequested', playerName });
       }
 
     } else if (action === 'guess') {
@@ -110,6 +136,36 @@ export const handler = async (event) => {
           }
         } else {
           const hint = num < player.target ? 'higher' : 'lower';
+          await sendMessage(connectionId, { type: 'guessResult', hint });
+        }
+      } else if (room.gameMode === 'standard') {
+        // TURN BASED LOGIC
+        const currentPlayer = room.players[room.currentTurnIndex];
+        if (currentPlayer.connectionId !== connectionId) {
+          await sendMessage(connectionId, { type: 'error', message: "It's not your turn!" });
+          return { statusCode: 200, body: 'Not turn' };
+        }
+
+        if (num === currentPlayer.target) {
+          room.status = 'finished';
+          room.winner = player.name;
+          await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+          for (const p of room.players) {
+            await sendMessage(p.connectionId, { type: 'gameOver', winner: player.name });
+          }
+        } else {
+          const hint = num < currentPlayer.target ? 'higher' : 'lower';
+          room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
+          
+          if (!room.messages) room.messages = [];
+          room.messages.unshift({ nickname: player.name, message: `Guessed ${num} (too ${hint === 'higher' ? 'low' : 'high'})` });
+          if (room.messages.length > 20) room.messages.pop(); // keep last 20
+          
+          await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+          
+          for (const p of room.players) {
+            await sendMessage(p.connectionId, { type: 'gameUpdated', room });
+          }
           await sendMessage(connectionId, { type: 'guessResult', hint });
         }
       }
