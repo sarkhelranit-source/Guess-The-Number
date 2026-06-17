@@ -33,6 +33,8 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     } catch(e: any) {
       if (e.$metadata?.httpStatusCode === 410) {
         // connection is stale
+      } else {
+        console.error(`Failed to send message to ${connId}`, e);
       }
     }
   };
@@ -43,13 +45,13 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       const newRoom = {
         roomId: newRoomId,
         hostId: connectionId,
-        gameMode: gameMode || 'race', // 'race', 'turn-based', 'elimination'
+        gameMode: gameMode || 'race', // 'race', 'standard', 'elimination'
         players: [{ connectionId, name: playerName || 'Host', score: 0 }],
         status: 'waiting', // waiting, playing, finished
+        messages: [],
       };
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: newRoom }));
       
-      // Update connection with roomId
       await docClient.send(new UpdateCommand({
         TableName: CONNECTIONS_TABLE,
         Key: { connectionId },
@@ -75,7 +77,6 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         ExpressionAttributeValues: { ':r': roomId }
       }));
 
-      // Broadcast to all
       for (const p of room.players) {
         await sendMessage(p.connectionId, { type: 'playerJoined', room });
       }
@@ -85,9 +86,12 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       if (!room || room.hostId !== connectionId) throw new Error('Unauthorized');
 
       room.status = 'playing';
+      if (gameMode) room.gameMode = gameMode; // Store selected mode!
+      room.currentTurnIndex = 0;
+      room.messages = [];
+
       // Assign target numbers
       room.players.forEach((p: any) => p.target = Math.floor(Math.random() * 100) + 1);
-      room.currentTurnIndex = 0;
 
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
@@ -116,8 +120,37 @@ export const handler: APIGatewayProxyHandler = async (event) => {
           const hint = num < player.target ? 'higher' : 'lower';
           await sendMessage(connectionId!, { type: 'guessResult', hint });
         }
+      } else if (room.gameMode === 'standard') {
+        // TURN BASED LOGIC
+        const currentPlayer = room.players[room.currentTurnIndex];
+        if (currentPlayer.connectionId !== connectionId) {
+          await sendMessage(connectionId!, { type: 'error', message: "It's not your turn!" });
+          return { statusCode: 200, body: 'Not turn' };
+        }
+
+        if (num === currentPlayer.target) {
+          room.status = 'finished';
+          room.winner = player.name;
+          await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+          for (const p of room.players) {
+            await sendMessage(p.connectionId, { type: 'gameOver', winner: player.name });
+          }
+        } else {
+          const hint = num < currentPlayer.target ? 'higher' : 'lower';
+          room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
+          
+          if (!room.messages) room.messages = [];
+          room.messages.unshift({ nickname: player.name, message: `Guessed ${num} (too ${hint === 'higher' ? 'low' : 'high'})` });
+          if (room.messages.length > 20) room.messages.pop(); // keep last 20
+          
+          await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+          
+          for (const p of room.players) {
+            await sendMessage(p.connectionId, { type: 'gameUpdated', room });
+          }
+          await sendMessage(connectionId!, { type: 'guessResult', hint });
+        }
       }
-      // Note: Turn-Based and Elimination logic to be expanded...
     }
 
     return { statusCode: 200, body: 'Processed' };

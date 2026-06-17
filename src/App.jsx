@@ -16,6 +16,7 @@ function App() {
   const [error, setError] = useState('');
   const [winner, setWinner] = useState('');
   const [lastHint, setLastHint] = useState('');
+  const [selectedMode, setSelectedMode] = useState(''); // track mode selected by host
 
   useEffect(() => {
     const unsubCreated = wsService.on('roomCreated', (data) => {
@@ -37,6 +38,10 @@ function App() {
       setPhase('playing');
     });
 
+    const unsubUpdated = wsService.on('gameUpdated', (data) => {
+      setGameState(data.room);
+    });
+
     const unsubHint = wsService.on('guessResult', (data) => {
       setLastHint(`Try something ${data.hint}!`);
     });
@@ -54,6 +59,7 @@ function App() {
       unsubCreated();
       unsubJoined();
       unsubStarted();
+      unsubUpdated();
       unsubHint();
       unsubOver();
       unsubError();
@@ -84,8 +90,12 @@ function App() {
   const handleCreateRoom = (name) => connectAndJoin(name, 'createRoom');
   const handleJoinRoom = (name, code) => connectAndJoin(name, 'joinRoom', code);
 
+  const handleSetGameMode = (mode) => {
+    setSelectedMode(mode);
+  };
+
   const handleStartGame = () => {
-    wsService.send({ action: 'startGame', roomId });
+    wsService.send({ action: 'startGame', roomId, gameMode: selectedMode || gameState.gameMode });
   };
 
   const handleLeaveRoom = () => {
@@ -103,7 +113,6 @@ function App() {
 
   return (
     <div className="relative min-h-screen bg-dark-bg text-white overflow-hidden">
-      {/* Global Error Banner */}
       {error && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-500/90 text-white px-6 py-3 rounded-lg shadow-lg font-bold flex items-center">
           {error}
@@ -117,35 +126,35 @@ function App() {
             <LandingPage onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} />
           </motion.div>
         )}
-
+        
         {phase === 'lobby' && gameState && (
           <motion.div key="lobby" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.1 }} className="absolute inset-0">
-            <Lobby
-              players={gameState.players.map(p => p.name)}
-              roomId={roomId}
-              isHost={isHost}
-              gameMode={gameState.gameMode}
-              setGameMode={() => { }} // not fully implemented on backend yet
-              onStartGame={handleStartGame}
+            <Lobby 
+              players={gameState.players.map(p => p.name)} 
+              roomId={roomId} 
+              isHost={isHost} 
+              gameMode={gameState.gameMode} 
+              setGameMode={handleSetGameMode}
+              onStartGame={handleStartGame} 
               onLeave={handleLeaveRoom}
             />
           </motion.div>
         )}
-
+        
         {phase === 'playing' && gameState && (
           <motion.div key="playing" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="absolute inset-0">
-            <GamePhase
-              gameState={gameState}
-              myNickname={nickname}
+            <GamePhase 
+              gameState={gameState} 
+              myNickname={nickname} 
               onGuess={handleGuess}
               lastHint={lastHint}
             />
           </motion.div>
         )}
-
+        
         {phase === 'result' && gameState && (
           <motion.div key="result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-            <ResultPhase
+            <ResultPhase 
               winner={winner}
               myNickname={nickname}
               onBackToLobby={handleLeaveRoom}
