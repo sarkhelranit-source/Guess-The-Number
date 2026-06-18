@@ -8,6 +8,23 @@ const docClient = DynamoDBDocumentClient.from(client);
 const GAMES_TABLE = process.env.GAMES_TABLE_NAME!;
 const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE_NAME!;
 
+if (!process.env.GAMES_TABLE_NAME || !process.env.CONNECTIONS_TABLE_NAME) {
+  throw new Error("Missing required environment variables: GAMES_TABLE_NAME or CONNECTIONS_TABLE_NAME");
+}
+
+const getPublicRoom = (room: any) => {
+  if (!room) return room;
+  const publicRoom = { ...room };
+  delete publicRoom.hostId; // Strip sensitive hostId
+  if (publicRoom.players) {
+    publicRoom.players = publicRoom.players.map((p: any) => {
+      const { connectionId, ...publicPlayer } = p; // Strip sensitive connectionId
+      return publicPlayer;
+    });
+  }
+  return publicRoom;
+};
+
 export const handler: APIGatewayProxyHandler = async (event) => {
   const connectionId = event.requestContext.connectionId;
   const endpoint = `https://${event.requestContext.domainName}/${event.requestContext.stage}`;
@@ -42,11 +59,12 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   try {
     if (action === 'createRoom') {
       const newRoomId = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const safeName = (playerName || 'Host').substring(0, 15).replace(/[^a-zA-Z0-9 ]/g, "");
       const newRoom = {
         roomId: newRoomId,
         hostId: connectionId,
         gameMode: gameMode || 'race', // 'race', 'standard', 'elimination'
-        players: [{ connectionId, name: playerName || 'Host', score: 0 }],
+        players: [{ connectionId, name: safeName, score: 0 }],
         status: 'waiting', // waiting, playing, finished
         messages: [],
       };
@@ -59,14 +77,15 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         ExpressionAttributeValues: { ':r': newRoomId }
       }));
 
-      await sendMessage(connectionId!, { type: 'roomCreated', room: newRoom });
+      await sendMessage(connectionId!, { type: 'roomCreated', room: getPublicRoom(newRoom) });
 
     } else if (action === 'joinRoom') {
       const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
       if (!room) throw new Error('Room not found');
       if (room.status !== 'waiting') throw new Error('Game already started');
 
-      const newPlayer = { connectionId, name: playerName || 'Guest', score: 0 };
+      const safeName = (playerName || 'Guest').substring(0, 15).replace(/[^a-zA-Z0-9 ]/g, "");
+      const newPlayer = { connectionId, name: safeName, score: 0 };
       room.players.push(newPlayer);
 
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
@@ -78,7 +97,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       }));
 
       for (const p of room.players) {
-        await sendMessage(p.connectionId, { type: 'playerJoined', room });
+        await sendMessage(p.connectionId, { type: 'playerJoined', room: getPublicRoom(room) });
       }
 
     } else if (action === 'startGame') {
@@ -103,7 +122,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
       for (const p of room.players) {
-        await sendMessage(p.connectionId, { type: 'gameStarted', room });
+        await sendMessage(p.connectionId, { type: 'gameStarted', room: getPublicRoom(room) });
       }
 
     } else if (action === 'returnToLobby') {
@@ -119,7 +138,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
       for (const p of room.players) {
-        await sendMessage(p.connectionId, { type: 'returnedToLobby', room });
+        await sendMessage(p.connectionId, { type: 'returnedToLobby', room: getPublicRoom(room) });
       }
 
     } else if (action === 'rematchRequest') {
@@ -139,6 +158,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       if (!player) throw new Error('Player not in room');
 
       const num = parseInt(guess);
+      if (isNaN(num)) {
+        await sendMessage(connectionId!, { type: 'error', message: "Invalid guess! Must be a number." });
+        return { statusCode: 200, body: 'Invalid guess' };
+      }
 
       if (room.gameMode === 'race') {
         if (num === player.target) {
@@ -178,7 +201,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
           await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
           
           for (const p of room.players) {
-            await sendMessage(p.connectionId, { type: 'gameUpdated', room });
+            await sendMessage(p.connectionId, { type: 'gameUpdated', room: getPublicRoom(room) });
           }
           await sendMessage(connectionId!, { type: 'guessResult', hint });
         }
@@ -235,7 +258,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
             for (const p of room.players) {
-              await sendMessage(p.connectionId, { type: 'roundEnded', room, roundResults });
+              await sendMessage(p.connectionId, { type: 'roundEnded', room: getPublicRoom(room), roundResults });
               await sendMessage(p.connectionId, { type: 'gameOver', winner: room.winner, delay: 5000, target: room.roundTarget });
             }
           } else {
@@ -245,14 +268,14 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
             
             for (const p of room.players) {
-              await sendMessage(p.connectionId, { type: 'roundEnded', room, roundResults });
+              await sendMessage(p.connectionId, { type: 'roundEnded', room: getPublicRoom(room), roundResults });
             }
           }
         } else {
           // Just update state that someone guessed
           await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
           for (const p of room.players) {
-            await sendMessage(p.connectionId, { type: 'gameUpdated', room });
+            await sendMessage(p.connectionId, { type: 'gameUpdated', room: getPublicRoom(room) });
           }
         }
       }

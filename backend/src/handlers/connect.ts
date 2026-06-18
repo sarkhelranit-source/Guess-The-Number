@@ -8,6 +8,23 @@ const docClient = DynamoDBDocumentClient.from(client);
 const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE_NAME!;
 const GAMES_TABLE = process.env.GAMES_TABLE_NAME!;
 
+if (!process.env.GAMES_TABLE_NAME || !process.env.CONNECTIONS_TABLE_NAME) {
+  throw new Error("Missing required environment variables: GAMES_TABLE_NAME or CONNECTIONS_TABLE_NAME");
+}
+
+const getPublicRoom = (room: any) => {
+  if (!room) return room;
+  const publicRoom = { ...room };
+  delete publicRoom.hostId;
+  if (publicRoom.players) {
+    publicRoom.players = publicRoom.players.map((p: any) => {
+      const { connectionId, ...publicPlayer } = p;
+      return publicPlayer;
+    });
+  }
+  return publicRoom;
+};
+
 export const handler: APIGatewayProxyHandler = async (event) => {
   const connectionId = event.requestContext.connectionId;
   const eventType = event.requestContext.eventType;
@@ -58,7 +75,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
               try {
                 await apiGateway.send(new PostToConnectionCommand({
                   ConnectionId: p.connectionId,
-                  Data: Buffer.from(JSON.stringify({ type: 'playerLeft', room, leftPlayer: leavingPlayer?.name }))
+                  Data: Buffer.from(JSON.stringify({ type: 'playerLeft', room: getPublicRoom(room), leftPlayer: leavingPlayer?.name }))
                 }));
               } catch (e) {
                 // Ignore stale connection errors

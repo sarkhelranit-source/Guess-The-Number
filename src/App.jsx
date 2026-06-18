@@ -6,7 +6,10 @@ import GamePhase from './components/GamePhase';
 import ResultPhase from './components/ResultPhase';
 import { wsService } from './services/websocket';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'wss://xojwd75sgd.execute-api.us-east-1.amazonaws.com/production';
+const WS_URL = import.meta.env.VITE_WS_URL;
+if (!WS_URL) {
+  console.error("CRITICAL: VITE_WS_URL is not defined in environment variables!");
+}
 
 function App() {
   const [phase, setPhase] = useState('landing'); // landing, lobby, playing, result
