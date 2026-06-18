@@ -101,6 +101,10 @@ export class GameStack extends cdk.Stack {
       stageName: 'production',
       apiId: webSocketApi.ref,
       autoDeploy: true,
+      defaultRouteSettings: {
+        throttlingBurstLimit: 100,
+        throttlingRateLimit: 50,
+      }
     });
 
     // 7. Lambda Permissions (Allow API Gateway to invoke them)
