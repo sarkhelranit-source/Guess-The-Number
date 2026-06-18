@@ -9,6 +9,7 @@ lerna-debug.log*
 aws
 awscliv2.zip
 node_modules
+chat.md
 dist
 dist-ssr
 *.local
