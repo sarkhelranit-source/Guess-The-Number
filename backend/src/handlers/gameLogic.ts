@@ -162,6 +162,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         await sendMessage(connectionId!, { type: 'error', message: "Invalid guess! Must be a number." });
         return { statusCode: 200, body: 'Invalid guess' };
       }
+      if (num < 1 || num > 100) {
+        await sendMessage(connectionId!, { type: 'error', message: "Invalid guess! Must be between 1 and 100." });
+        return { statusCode: 200, body: 'Out of range' };
+      }
 
       if (room.gameMode === 'race') {
         if (num === player.target) {

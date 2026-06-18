@@ -5,6 +5,7 @@ import Lobby from './components/Lobby';
 import GamePhase from './components/GamePhase';
 import ResultPhase from './components/ResultPhase';
 import { wsService } from './services/websocket';
+import DOMPurify from 'dompurify';
 
 const WS_URL = import.meta.env.VITE_WS_URL;
 if (!WS_URL) {
@@ -55,7 +56,7 @@ function App() {
     });
 
     const unsubOver = wsService.on('gameOver', (data) => {
-      setWinner(data.winner);
+      setWinner(DOMPurify.sanitize(data.winner));
       setLastTarget(data.target);
       if (data.delay) {
         setTimeout(() => setPhase('result'), data.delay);
@@ -65,7 +66,7 @@ function App() {
     });
 
     const unsubRematch = wsService.on('rematchRequested', (data) => {
-      setToastMessage(`${data.playerName} wants a rematch!`);
+      setToastMessage(`${DOMPurify.sanitize(data.playerName)} wants a rematch!`);
       setTimeout(() => setToastMessage(''), 3000);
     });
 
@@ -76,7 +77,7 @@ function App() {
 
     const unsubPlayerLeft = wsService.on('playerLeft', (data) => {
       setGameState(data.room);
-      setToastMessage(`${data.leftPlayer} left the room.`);
+      setToastMessage(`${DOMPurify.sanitize(data.leftPlayer)} left the room.`);
       setTimeout(() => setToastMessage(''), 3000);
     });
 
@@ -196,7 +197,7 @@ function App() {
         {phase === 'lobby' && gameState && (
           <motion.div key="lobby" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.1 }} className="absolute inset-0">
             <Lobby 
-              players={gameState.players.map(p => p.name)} 
+              players={gameState.players.map(p => DOMPurify.sanitize(p.name))} 
               roomId={roomId} 
               isHost={isHost} 
               gameMode={gameState.gameMode} 
