@@ -91,8 +91,14 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       room.messages = [];
 
       // Assign target numbers
-      const commonTarget = Math.floor(Math.random() * 100) + 1;
-      room.players.forEach((p: any) => p.target = commonTarget);
+      if (room.gameMode === 'elimination') {
+        room.roundTarget = Math.floor(Math.random() * 100) + 1;
+        room.eliminated = [];
+        room.roundGuesses = {};
+      } else {
+        const commonTarget = Math.floor(Math.random() * 100) + 1;
+        room.players.forEach((p: any) => p.target = commonTarget);
+      }
 
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
@@ -107,6 +113,8 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       room.status = 'waiting';
       delete room.winner;
       room.messages = [];
+      room.eliminated = [];
+      room.roundGuesses = {};
 
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
@@ -138,7 +146,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
           room.winner = player.name;
           await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
           for (const p of room.players) {
-            await sendMessage(p.connectionId, { type: 'gameOver', winner: player.name });
+            await sendMessage(p.connectionId, { type: 'gameOver', winner: player.name, target: player.target });
           }
         } else {
           const hint = num < player.target ? 'higher' : 'lower';
@@ -157,7 +165,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
           room.winner = player.name;
           await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
           for (const p of room.players) {
-            await sendMessage(p.connectionId, { type: 'gameOver', winner: player.name });
+            await sendMessage(p.connectionId, { type: 'gameOver', winner: player.name, target: currentPlayer.target });
           }
         } else {
           const hint = num < currentPlayer.target ? 'higher' : 'lower';
@@ -173,6 +181,79 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             await sendMessage(p.connectionId, { type: 'gameUpdated', room });
           }
           await sendMessage(connectionId!, { type: 'guessResult', hint });
+        }
+      } else if (room.gameMode === 'elimination') {
+        // ELIMINATION LOGIC
+        if (!room.eliminated) room.eliminated = [];
+        if (!room.roundGuesses) room.roundGuesses = {};
+
+        if (room.eliminated.includes(player.name)) {
+          await sendMessage(connectionId!, { type: 'error', message: "You are eliminated!" });
+          return { statusCode: 200, body: 'Eliminated' };
+        }
+
+        if (room.roundGuesses[player.name] !== undefined) {
+          await sendMessage(connectionId!, { type: 'error', message: "You already guessed this round!" });
+          return { statusCode: 200, body: 'Already guessed' };
+        }
+
+        room.roundGuesses[player.name] = num;
+
+        const activePlayers = room.players.filter((p: any) => !room.eliminated.includes(p.name));
+        
+        if (Object.keys(room.roundGuesses).length === activePlayers.length) {
+          // Round is over
+          const differences = activePlayers.map((p: any) => {
+            const diff = Math.abs(room.roundGuesses[p.name] - room.roundTarget);
+            return { name: p.name, diff, guess: room.roundGuesses[p.name] };
+          });
+
+          const maxDiff = Math.max(...differences.map((d: any) => d.diff));
+          const furthestPlayers = differences.filter((d: any) => d.diff === maxDiff);
+
+          const roundResults = {
+            target: room.roundTarget,
+            guesses: differences,
+            eliminated: [] as string[],
+            isTiebreaker: false
+          };
+
+          if (furthestPlayers.length === activePlayers.length && activePlayers.length > 1) {
+            // Everyone tied! Tiebreaker!
+            roundResults.isTiebreaker = true;
+          } else {
+            // Eliminate furthest
+            roundResults.eliminated = furthestPlayers.map((p: any) => p.name);
+            room.eliminated.push(...roundResults.eliminated);
+          }
+
+          const remainingPlayers = room.players.filter((p: any) => !room.eliminated.includes(p.name));
+
+          if (remainingPlayers.length <= 1) {
+            room.status = 'finished';
+            room.winner = remainingPlayers.length === 1 ? remainingPlayers[0].name : "No one";
+            await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+
+            for (const p of room.players) {
+              await sendMessage(p.connectionId, { type: 'roundEnded', room, roundResults });
+              await sendMessage(p.connectionId, { type: 'gameOver', winner: room.winner, delay: 5000, target: room.roundTarget });
+            }
+          } else {
+            // Start next round
+            room.roundTarget = Math.floor(Math.random() * 100) + 1;
+            room.roundGuesses = {};
+            await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+            
+            for (const p of room.players) {
+              await sendMessage(p.connectionId, { type: 'roundEnded', room, roundResults });
+            }
+          }
+        } else {
+          // Just update state that someone guessed
+          await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+          for (const p of room.players) {
+            await sendMessage(p.connectionId, { type: 'gameUpdated', room });
+          }
         }
       }
     }

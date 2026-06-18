@@ -18,6 +18,8 @@ function App() {
   const [lastHint, setLastHint] = useState('');
   const [selectedMode, setSelectedMode] = useState(''); // track mode selected by host
   const [toastMessage, setToastMessage] = useState('');
+  const [roundResults, setRoundResults] = useState(null);
+  const [lastTarget, setLastTarget] = useState(null);
 
   const isHost = gameState?.players?.[0]?.name === nickname;
 
@@ -51,7 +53,12 @@ function App() {
 
     const unsubOver = wsService.on('gameOver', (data) => {
       setWinner(data.winner);
-      setPhase('result');
+      setLastTarget(data.target);
+      if (data.delay) {
+        setTimeout(() => setPhase('result'), data.delay);
+      } else {
+        setPhase('result');
+      }
     });
 
     const unsubRematch = wsService.on('rematchRequested', (data) => {
@@ -70,6 +77,14 @@ function App() {
       setTimeout(() => setToastMessage(''), 3000);
     });
 
+    const unsubRoundEnded = wsService.on('roundEnded', (data) => {
+      setGameState(data.room);
+      setRoundResults(data.roundResults);
+      setTimeout(() => {
+        setRoundResults(null);
+      }, 5000);
+    });
+
     const unsubError = wsService.on('error', (data) => {
       setError(data.message);
     });
@@ -84,6 +99,7 @@ function App() {
       unsubRematch();
       unsubReturnedToLobby();
       unsubPlayerLeft();
+      unsubRoundEnded();
       unsubError();
     };
   }, [phase]);
@@ -195,6 +211,7 @@ function App() {
               myNickname={nickname} 
               onGuess={handleGuess}
               lastHint={lastHint}
+              roundResults={roundResults}
             />
           </motion.div>
         )}
@@ -207,6 +224,7 @@ function App() {
               isHost={isHost}
               onPlayAgain={handlePlayAgain}
               onBackToRoom={handleBackToRoom}
+              target={lastTarget}
             />
           </motion.div>
         )}
