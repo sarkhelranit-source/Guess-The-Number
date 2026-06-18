@@ -63,7 +63,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       const newRoom = {
         roomId: newRoomId,
         hostId: connectionId,
-        gameMode: gameMode || 'race', // 'race', 'standard', 'elimination'
+        gameMode: gameMode || 'race', // 'race', 'proximity', 'elimination'
         players: [{ connectionId, name: safeName, score: 0 }],
         status: 'waiting', // waiting, playing, finished
         messages: [],
@@ -179,7 +179,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
           const hint = num < player.target ? 'higher' : 'lower';
           await sendMessage(connectionId!, { type: 'guessResult', hint });
         }
-      } else if (room.gameMode === 'standard') {
+      } else if (room.gameMode === 'proximity') {
         // TURN BASED LOGIC
         const currentPlayer = room.players[room.currentTurnIndex];
         if (currentPlayer.connectionId !== connectionId) {
@@ -196,10 +196,19 @@ export const handler: APIGatewayProxyHandler = async (event) => {
           }
         } else {
           const hint = num < currentPlayer.target ? 'higher' : 'lower';
+          
+          const diff = Math.abs(num - currentPlayer.target);
+          let temp = '';
+          if (diff <= 5) temp = '🌋 Boiling!';
+          else if (diff <= 15) temp = '🔥 Hot!';
+          else if (diff <= 30) temp = '☀️ Warm!';
+          else if (diff <= 50) temp = '🧊 Cold!';
+          else temp = '❄️ Freezing!';
+
           room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
           
           if (!room.messages) room.messages = [];
-          room.messages.unshift({ nickname: player.name, message: `Guessed ${num} (too ${hint === 'higher' ? 'low' : 'high'})` });
+          room.messages.unshift({ nickname: player.name, message: `Guessed ${num} (${temp})` });
           if (room.messages.length > 20) room.messages.pop(); // keep last 20
           
           await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
@@ -207,7 +216,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
           for (const p of room.players) {
             await sendMessage(p.connectionId, { type: 'gameUpdated', room: getPublicRoom(room) });
           }
-          await sendMessage(connectionId!, { type: 'guessResult', hint });
+          await sendMessage(connectionId!, { type: 'guessResult', hint: temp, hintType: 'temperature' });
         }
       } else if (room.gameMode === 'elimination') {
         // ELIMINATION LOGIC

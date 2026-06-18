@@ -3,15 +3,16 @@ import { motion } from 'framer-motion';
 
 export default function Lobby({ players, roomId, isHost, gameMode: initialGameMode, setGameMode, onStartGame, onLeave }) {
   const [localMode, setLocalMode] = useState(initialGameMode?.toLowerCase() || 'race');
+  const [infoMode, setInfoMode] = useState(null);
 
   useEffect(() => {
     if (initialGameMode) setLocalMode(initialGameMode.toLowerCase());
   }, [initialGameMode]);
 
   const gameModes = [
-    { id: 'STANDARD', title: 'Standard', desc: 'Classic Guess The Number. Play at your own pace.' },
-    { id: 'RACE', title: 'Race', desc: 'First to guess the number wins the round.' },
-    { id: 'ELIMINATION', title: 'Elimination', desc: 'Slowest guesser is eliminated each round.' }
+    { id: 'PROXIMITY', title: 'Proximity Hints', desc: 'Turn-based guessing with temperature hints.', fullRules: "Turn-based guessing. The game tells you how close a guess is based on temperature: Boiling (within 5), Hot (within 15), Warm (within 30), Cold (within 50), or Freezing (more than 50 away)." },
+    { id: 'RACE', title: 'Race', desc: 'First to guess the number wins the round.', fullRules: "Everyone races to guess the same hidden number at the same time. No turns! First to guess correctly wins instantly." },
+    { id: 'ELIMINATION', title: 'Elimination', desc: 'Slowest guesser is eliminated each round.', fullRules: "Everyone guesses one number per round. The player whose guess is furthest from the secret number is eliminated. Last player standing wins." }
   ];
 
   return (
@@ -73,10 +74,10 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
               {gameModes.map(mode => {
                 const isSelected = localMode === mode.id.toLowerCase();
                 return (
-                  <button
+                  <div
                     key={mode.id}
-                    disabled={!isHost}
                     onClick={() => {
+                      if (!isHost) return;
                       setLocalMode(mode.id.toLowerCase());
                       if (setGameMode) setGameMode(mode.id.toLowerCase());
                     }}
@@ -84,13 +85,22 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
                       isSelected 
                         ? 'bg-brand-primary/20 border-brand-primary' 
                         : 'bg-dark-bg/50 border-white/10 hover:border-brand-primary/50'
-                    } ${!isHost ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+                    } ${!isHost ? 'opacity-80' : 'cursor-pointer'}`}
                   >
-                    <h4 className={`text-lg font-bold mb-1 ${isSelected ? 'text-brand-primary' : 'text-white'}`}>
-                      {mode.title}
-                    </h4>
+                    <div className="flex justify-between items-center mb-1">
+                      <h4 className={`text-lg font-bold ${isSelected ? 'text-brand-primary' : 'text-white'}`}>
+                        {mode.title}
+                      </h4>
+                      <button 
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setInfoMode(mode); }}
+                        className="text-xs bg-brand-primary/20 text-brand-primary px-3 py-1 rounded border border-brand-primary/30 hover:bg-brand-primary hover:text-white transition-colors cursor-pointer z-10 relative font-bold uppercase tracking-wider"
+                      >
+                        Rules
+                      </button>
+                    </div>
                     <p className="text-sm text-gray-400 leading-relaxed">{mode.desc}</p>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -114,6 +124,27 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
           </div>
         </div>
       </motion.div>
+
+      {/* Rules Modal Overlay */}
+      {infoMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setInfoMode(null)}>
+          <motion.div 
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="bg-dark-bg border border-brand-primary/50 rounded-2xl p-8 max-w-lg w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-3xl font-playfair font-bold text-white mb-4 text-brand-primary">{infoMode.title} Rules</h3>
+            <p className="text-lg text-gray-300 leading-relaxed mb-8">{infoMode.fullRules}</p>
+            <button 
+              className="primary-btn w-full py-3 text-lg font-bold"
+              onClick={() => setInfoMode(null)}
+            >
+              Got it!
+            </button>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

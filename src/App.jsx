@@ -52,7 +52,11 @@ function App() {
     });
 
     const unsubHint = wsService.on('guessResult', (data) => {
-      setLastHint(`Try something ${data.hint}!`);
+      if (data.hintType === 'temperature') {
+        setLastHint(data.hint);
+      } else {
+        setLastHint(`Try something ${data.hint}!`);
+      }
     });
 
     const unsubOver = wsService.on('gameOver', (data) => {
@@ -229,6 +233,7 @@ function App() {
               onPlayAgain={handlePlayAgain}
               onBackToRoom={handleBackToRoom}
               target={lastTarget}
+              gameMode={gameState.gameMode}
             />
           </motion.div>
         )}

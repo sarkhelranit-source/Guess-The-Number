@@ -1,19 +1,19 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 
-export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, onBackToRoom, target }) {
+export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, onBackToRoom, target, gameMode }) {
   const isWinner = winner === myNickname;
   const [waitingForHost, setWaitingForHost] = useState(false);
-  const [showReveal, setShowReveal] = useState(!!target);
+  const [showReveal, setShowReveal] = useState(!!target && gameMode === 'elimination');
 
   useEffect(() => {
-    if (target) {
+    if (target && gameMode === 'elimination') {
       const timer = setTimeout(() => setShowReveal(false), 3000);
       return () => clearTimeout(timer);
     } else {
       setShowReveal(false);
     }
-  }, [target]);
+  }, [target, gameMode]);
 
   const handlePlayAgain = () => {
     onPlayAgain();
@@ -75,6 +75,7 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
                 {isWinner 
                   ? "Your intuition was perfect! You guessed the hidden number before anyone else!"
                   : `Better luck next time! ${winner} was just a little bit faster this round.`}
+                {target && <span className="block mt-4 text-brand-secondary">The target number was {target}!</span>}
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

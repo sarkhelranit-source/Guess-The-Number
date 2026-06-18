@@ -10,7 +10,7 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
   const hasGuessedThisRound = isElimination && gameState.roundGuesses?.[myNickname] !== undefined;
 
   let isMyTurn = true;
-  if (gameState.gameMode === 'standard') {
+  if (gameState.gameMode === 'proximity') {
     isMyTurn = gameState.players[gameState.currentTurnIndex]?.name === myNickname;
   } else if (isElimination) {
     isMyTurn = !isEliminated && !hasGuessedThisRound;
@@ -38,7 +38,7 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
       if (hasGuessedThisRound) return "Guess Locked In! Waiting for others... 🔒";
       return "Make Your Blind Guess!";
     }
-    if (gameState.gameMode === 'standard') {
+    if (gameState.gameMode === 'proximity') {
       return isMyTurn ? "Your Turn!" : "Waiting for others...";
     }
     return "Make Your Guess!";
@@ -148,7 +148,7 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
           <h3 className="text-xl font-bold border-b border-white/10 pb-2 mb-4">Players</h3>
           <div className="flex flex-col gap-3 mb-6">
             {gameState.players.map((p, i) => {
-              const isCurrentTurn = gameState.gameMode === 'standard' && i === gameState.currentTurnIndex;
+              const isCurrentTurn = gameState.gameMode === 'proximity' && i === gameState.currentTurnIndex;
               const isPlayerEliminated = isElimination && gameState.eliminated?.includes(p.name);
               const hasPlayerGuessed = isElimination && gameState.roundGuesses?.[p.name] !== undefined;
 
@@ -168,7 +168,7 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
                   {isElimination && !isPlayerEliminated && !hasPlayerGuessed && (
                     <span className="ml-auto text-xs text-gray-400 font-bold uppercase tracking-widest">Thinking...</span>
                   )}
-                  {gameState.gameMode === 'standard' && isCurrentTurn && (
+                  {gameState.gameMode === 'proximity' && isCurrentTurn && (
                     <span className="ml-auto text-xs text-brand-primary font-bold uppercase tracking-widest">Thinking...</span>
                   )}
                   {gameState.gameMode === 'race' && (
@@ -179,8 +179,8 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
             })}
           </div>
 
-          {/* Live Feed for Standard Mode */}
-          {gameState.gameMode === 'standard' && (
+          {/* Live Feed for Proximity Mode */}
+          {gameState.gameMode === 'proximity' && (
             <>
               <h3 className="text-xl font-bold border-b border-white/10 pb-2 mb-4">Live Feed</h3>
               <div className="flex-1 bg-dark-bg/50 rounded-lg p-4 overflow-y-auto max-h-48 space-y-2 border border-white/5 flex flex-col-reverse">
