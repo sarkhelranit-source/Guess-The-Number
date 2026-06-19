@@ -6,11 +6,10 @@ import { playClick } from '../services/soundManager';
 // ── Typewriter letter animation variants ────────────
 const titleText = "Guess The Number";
 const letterVariants = {
-  hidden: { opacity: 0, y: 20, filter: 'blur(8px)' },
+  hidden: { opacity: 0, y: 20 },
   visible: (i) => ({
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
     transition: {
       delay: 0.8 + i * 0.06,
       duration: 0.4,
@@ -43,9 +42,14 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
+    let lastWidth = window.innerWidth;
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      // Only resize if width changes to prevent canvas thrashing when mobile keyboard pops up
+      if (window.innerWidth !== lastWidth || !canvas.width) {
+        lastWidth = window.innerWidth;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
     };
     resize();
     window.addEventListener('resize', resize);
