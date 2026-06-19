@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import LandingPage from './components/LandingPage';
 import Lobby from './components/Lobby';
@@ -10,6 +10,35 @@ import DOMPurify from 'dompurify';
 const WS_URL = import.meta.env.VITE_WS_URL;
 if (!WS_URL) {
   console.error("CRITICAL: VITE_WS_URL is not defined in environment variables!");
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    this.setState({ error, errorInfo });
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 20, background: 'red', color: 'white', minHeight: '100vh' }}>
+          <h1>Something went wrong.</h1>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error && this.state.error.toString()}</pre>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>{this.state.errorInfo && this.state.errorInfo.componentStack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function App() {
@@ -25,8 +54,13 @@ function App() {
   const [roundResults, setRoundResults] = useState(null);
   const [lastTarget, setLastTarget] = useState(null);
 
+  // Use a ref to track phase inside callbacks to avoid stale closures
+  const phaseRef = useRef(phase);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+
   const isHost = gameState?.players?.[0]?.name === nickname;
 
+  // Subscribe to WebSocket events ONCE on mount — no [phase] dependency
   useEffect(() => {
     const unsubCreated = wsService.on('roomCreated', (data) => {
       setRoomId(data.room.roomId);
@@ -38,11 +72,13 @@ function App() {
     const unsubJoined = wsService.on('playerJoined', (data) => {
       setRoomId(data.room.roomId);
       setGameState(data.room);
-      if (phase === 'landing') setPhase('lobby');
+      // Use ref to read current phase without stale closure
+      if (phaseRef.current === 'landing') setPhase('lobby');
       setError('');
     });
 
     const unsubStarted = wsService.on('gameStarted', (data) => {
+      console.log('[App] gameStarted received', data);
       setGameState(data.room);
       setPhase('playing');
     });
@@ -110,7 +146,7 @@ function App() {
       unsubRoundEnded();
       unsubError();
     };
-  }, [phase]);
+  }, []); // <-- Empty dependency: subscribe once, unsubscribe on unmount
 
   const connectAndJoin = (name, action, roomCode = null) => {
     setNickname(name);
@@ -125,7 +161,8 @@ function App() {
       },
       (err) => setError('Failed to connect to server. Check your WebSocket URL!'),
       () => {
-        if (phase !== 'landing') {
+        // Use ref for current phase
+        if (phaseRef.current !== 'landing') {
           setError('Disconnected from server.');
           setPhase('landing');
         }
@@ -172,34 +209,54 @@ function App() {
   };
 
   return (
-    <div className="relative min-h-screen bg-dark-bg text-white overflow-hidden">
-      {error && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-500/90 text-white px-6 py-3 rounded-lg shadow-lg font-bold flex items-center">
-          {error}
-          <button onClick={() => setError('')} className="ml-4 opacity-50 hover:opacity-100 font-bold text-xl">×</button>
-        </div>
-      )}
+    <ErrorBoundary>
+      <div className="relative min-h-screen mesh-bg text-white overflow-hidden font-inter">
+      {/* ── Error Toast ────────────────────────────── */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -30, scale: 0.95 }}
+            className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-500/15 backdrop-blur-md border border-red-500/30 text-red-300 px-6 py-3 rounded-xl shadow-2xl font-space font-bold flex items-center gap-3"
+          >
+            <span className="text-red-400">⚠</span>
+            {error}
+            <button
+              onClick={() => setError('')}
+              className="ml-2 opacity-50 hover:opacity-100 font-bold text-lg transition-opacity"
+            >
+              ×
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {toastMessage && (
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          exit={{ opacity: 0, y: -20 }}
-          className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-brand-primary/90 text-white px-6 py-3 rounded-lg shadow-lg font-bold flex items-center"
-        >
-          {toastMessage}
-        </motion.div>
-      )}
+      {/* ── Info Toast ─────────────────────────────── */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -30, scale: 0.95 }}
+            className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-brand-primary/15 backdrop-blur-md border border-brand-primary/30 text-white px-6 py-3 rounded-xl shadow-2xl font-space font-bold flex items-center gap-3"
+          >
+            <span className="text-brand-primary">ℹ</span>
+            {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <AnimatePresence mode="wait">
+      {/* ── Phase Router ───────────────────────────── */}
+      <AnimatePresence>
         {phase === 'landing' && (
-          <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -50 }} className="absolute inset-0">
+          <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="absolute inset-0">
             <LandingPage onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} />
           </motion.div>
         )}
         
         {phase === 'lobby' && gameState && (
-          <motion.div key="lobby" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.1 }} className="absolute inset-0">
+          <motion.div key="lobby" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="absolute inset-0">
             <Lobby 
               players={gameState.players.map(p => DOMPurify.sanitize(p.name))} 
               roomId={roomId} 
@@ -213,7 +270,7 @@ function App() {
         )}
         
         {phase === 'playing' && gameState && (
-          <motion.div key="playing" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }} className="absolute inset-0">
+          <motion.div key="playing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="absolute inset-0">
             <GamePhase 
               gameState={gameState} 
               myNickname={nickname} 
@@ -225,7 +282,7 @@ function App() {
         )}
         
         {phase === 'result' && gameState && (
-          <motion.div key="result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
+          <motion.div key="result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="absolute inset-0">
             <ResultPhase 
               winner={winner}
               myNickname={nickname}
@@ -239,6 +296,7 @@ function App() {
         )}
       </AnimatePresence>
     </div>
+    </ErrorBoundary>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { playClick } from '../services/soundManager';
 
 export default function PlayerSetup({ onComplete }) {
   const [step, setStep] = useState(1);
@@ -11,6 +12,7 @@ export default function PlayerSetup({ onComplete }) {
     e.preventDefault();
     const c = parseInt(count);
     if (c > 0) {
+      playClick();
       setStep(2);
     } else {
       alert("Please enter a valid number greater than 0");
@@ -24,6 +26,7 @@ export default function PlayerSetup({ onComplete }) {
       return;
     }
     
+    playClick();
     const newNames = [...names, currentName];
     setNames(newNames);
     setCurrentName('');
@@ -34,7 +37,7 @@ export default function PlayerSetup({ onComplete }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative z-10 p-4">
+    <div className="min-h-screen flex items-center justify-center relative z-10 p-4 mesh-bg vignette">
       <AnimatePresence mode="wait">
         {step === 1 && (
           <motion.div
@@ -44,18 +47,25 @@ export default function PlayerSetup({ onComplete }) {
             exit={{ opacity: 0, x: 50 }}
             className="glass-panel w-full max-w-md"
           >
-            <h2 className="text-3xl font-playfair font-bold text-center mb-6 text-brand-primary">How many players?</h2>
+            <h2 className="text-3xl font-space font-bold text-center mb-6 text-brand-primary neon-text-primary">How many players?</h2>
             <form onSubmit={handleCountSubmit} className="flex flex-col gap-4">
               <input
                 type="number"
                 min="1"
-                className="input-field text-center text-2xl"
+                className="input-field text-center text-2xl font-space font-bold"
                 value={count}
                 onChange={(e) => setCount(e.target.value)}
                 placeholder="e.g. 2"
                 autoFocus
               />
-              <button type="submit" className="primary-btn w-full">Next</button>
+              <motion.button
+                type="submit"
+                className="primary-btn w-full py-3.5 font-space"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Next →
+              </motion.button>
             </form>
           </motion.div>
         )}
@@ -68,24 +78,29 @@ export default function PlayerSetup({ onComplete }) {
             exit={{ opacity: 0, scale: 0.9 }}
             className="glass-panel w-full max-w-md"
           >
-            <h2 className="text-3xl font-playfair font-bold text-center mb-6 text-brand-secondary">
+            <h2 className="text-3xl font-space font-bold text-center mb-6 text-brand-secondary neon-text-secondary">
               Player {names.length + 1}
             </h2>
             <form onSubmit={handleNameSubmit} className="flex flex-col gap-4">
               <input
                 type="text"
-                className="input-field text-center text-xl"
+                className="input-field text-center text-xl font-space"
                 value={currentName}
                 onChange={(e) => setCurrentName(e.target.value)}
                 placeholder="Enter Name"
                 autoFocus
               />
-              <div className="text-center text-sm text-gray-400 mb-2">
+              <div className="text-center text-sm text-gray-500 mb-2 font-inter">
                 {names.length} / {count} Players Added
               </div>
-              <button type="submit" className="primary-btn w-full">
-                {names.length + 1 === parseInt(count) ? "Start Game" : "Add Player"}
-              </button>
+              <motion.button
+                type="submit"
+                className="primary-btn w-full py-3.5 font-space"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {names.length + 1 === parseInt(count) ? "🎮 Start Game" : "Add Player →"}
+              </motion.button>
             </form>
           </motion.div>
         )}
