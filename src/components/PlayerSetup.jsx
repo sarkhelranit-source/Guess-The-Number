@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { playClick } from '../services/soundManager';
 
@@ -7,6 +7,16 @@ export default function PlayerSetup({ onComplete }) {
   const [count, setCount] = useState('');
   const [names, setNames] = useState([]);
   const [currentName, setCurrentName] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const handleCountSubmit = (e) => {
     e.preventDefault();
@@ -36,15 +46,29 @@ export default function PlayerSetup({ onComplete }) {
     }
   };
 
+  const step1Variants = {
+    initial: isMobile ? { opacity: 0 } : { opacity: 0, x: -50 },
+    animate: isMobile ? { opacity: 1 } : { opacity: 1, x: 0 },
+    exit: isMobile ? { opacity: 0 } : { opacity: 0, x: 50 },
+  };
+
+  const step2Variants = {
+    initial: isMobile ? { opacity: 0 } : { opacity: 0, x: -50 },
+    animate: isMobile ? { opacity: 1 } : { opacity: 1, x: 0 },
+    exit: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.9 },
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center relative z-10 p-4 mesh-bg vignette">
+    <div className="min-h-screen w-full flex items-start md:items-center justify-center relative z-10 p-4 pt-12 pb-6 md:py-0 bg-transparent overflow-y-auto">
       <AnimatePresence mode="wait">
         {step === 1 && (
           <motion.div
             key="step1"
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 50 }}
+            variants={step1Variants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: isMobile ? 0.2 : 0.4 }}
             className="glass-panel w-full max-w-md"
           >
             <h2 className="text-3xl font-space font-bold text-center mb-6 text-brand-primary neon-text-primary">How many players?</h2>
@@ -56,12 +80,12 @@ export default function PlayerSetup({ onComplete }) {
                 value={count}
                 onChange={(e) => setCount(e.target.value)}
                 placeholder="e.g. 2"
-                autoFocus
+                autoFocus={!isMobile}
               />
               <motion.button
                 type="submit"
                 className="primary-btn w-full py-3.5 font-space"
-                whileHover={{ scale: 1.02 }}
+                whileHover={isMobile ? {} : { scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
                 Next →
@@ -73,9 +97,11 @@ export default function PlayerSetup({ onComplete }) {
         {step === 2 && (
           <motion.div
             key="step2"
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, scale: 0.9 }}
+            variants={step2Variants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: isMobile ? 0.2 : 0.4 }}
             className="glass-panel w-full max-w-md"
           >
             <h2 className="text-3xl font-space font-bold text-center mb-6 text-brand-secondary neon-text-secondary">
@@ -88,7 +114,7 @@ export default function PlayerSetup({ onComplete }) {
                 value={currentName}
                 onChange={(e) => setCurrentName(e.target.value)}
                 placeholder="Enter Name"
-                autoFocus
+                autoFocus={!isMobile}
               />
               <div className="text-center text-sm text-gray-500 mb-2 font-inter">
                 {names.length} / {count} Players Added
@@ -96,7 +122,7 @@ export default function PlayerSetup({ onComplete }) {
               <motion.button
                 type="submit"
                 className="primary-btn w-full py-3.5 font-space"
-                whileHover={{ scale: 1.02 }}
+                whileHover={isMobile ? {} : { scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
                 {names.length + 1 === parseInt(count) ? "🎮 Start Game" : "Add Player →"}

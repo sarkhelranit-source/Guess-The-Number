@@ -21,6 +21,16 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
   const [counterValue, setCounterValue] = useState(0);
   const [counterDone, setCounterDone] = useState(false);
   const confettiFired = useRef(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // ── Dramatic reveal timer (elimination only) ──────
   useEffect(() => {
@@ -80,10 +90,11 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
       if (isWinner) {
         playVictory();
 
+        const countMultiplier = isMobile ? 0.4 : 1.0;
         // First burst
         confetti({
-          particleCount: 80,
-          spread: 70,
+          particleCount: Math.round(80 * countMultiplier),
+          spread: isMobile ? 50 : 70,
           origin: { y: 0.6 },
           colors: ['#4f46e5', '#ec4899', '#06b6d4', '#f59e0b', '#7c3aed'],
         });
@@ -91,16 +102,16 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
         // Side cannons
         setTimeout(() => {
           confetti({
-            particleCount: 50,
+            particleCount: Math.round(50 * countMultiplier),
             angle: 60,
-            spread: 55,
+            spread: isMobile ? 40 : 55,
             origin: { x: 0, y: 0.65 },
             colors: ['#4f46e5', '#ec4899', '#06b6d4', '#f59e0b'],
           });
           confetti({
-            particleCount: 50,
+            particleCount: Math.round(50 * countMultiplier),
             angle: 120,
-            spread: 55,
+            spread: isMobile ? 40 : 55,
             origin: { x: 1, y: 0.65 },
             colors: ['#4f46e5', '#ec4899', '#06b6d4', '#f59e0b'],
           });
@@ -109,8 +120,8 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
         // Gentle afterglow
         setTimeout(() => {
           confetti({
-            particleCount: 30,
-            spread: 100,
+            particleCount: Math.round(30 * countMultiplier),
+            spread: isMobile ? 70 : 100,
             origin: { y: 0.5 },
             colors: ['#f59e0b', '#ec4899'],
             gravity: 0.6,
@@ -126,19 +137,26 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
     if (!isHost) setWaitingForHost(true);
   };
 
+  const panelVariants = {
+    initial: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.85 },
+    animate: isMobile ? { opacity: 1 } : { opacity: 1, scale: 1 },
+    exit: isMobile ? { opacity: 0 } : { opacity: 0, scale: 1.1 },
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 mesh-bg vignette relative">
+    <div className="min-h-screen w-full flex items-start md:items-center justify-center p-4 pt-8 pb-8 md:py-6 bg-transparent relative overflow-y-auto">
 
       {/* Winner glow aura (optimized for mobile) */}
       {isWinner && !showReveal && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full animate-pulse pointer-events-none z-0" style={{ background: 'radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 50%)' }} />
+        <div className="hidden md:block absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full animate-pulse pointer-events-none z-0" style={{ background: 'radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 50%)' }} />
       )}
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.85 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 1.1 }}
-        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+        variants={panelVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={{ duration: isMobile ? 0.2 : 0.5, ease: "easeOut" }}
         className="glass-panel w-full max-w-2xl text-center py-12 md:py-16 min-h-[420px] flex items-center justify-center flex-col z-10"
       >
         <AnimatePresence mode="wait">
@@ -292,7 +310,7 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
                   className={`primary-btn py-3.5 px-8 text-base font-space ${
                     waitingForHost ? 'opacity-40 cursor-not-allowed' : 'animate-pulse-glow'
                   }`}
-                  whileHover={!waitingForHost ? { scale: 1.03 } : {}}
+                  whileHover={!waitingForHost && !isMobile ? { scale: 1.03 } : {}}
                   whileTap={!waitingForHost ? { scale: 0.97 } : {}}
                 >
                   {waitingForHost ? "⏳ Waiting for Host..." : "🔄 Play Again"}

@@ -210,7 +210,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <div className="relative min-h-screen mesh-bg text-white overflow-hidden font-inter">
+      <div className="relative min-h-screen mesh-bg text-white overflow-x-hidden overflow-y-auto font-inter">
       {/* ── Error Toast ────────────────────────────── */}
       <AnimatePresence>
         {error && (

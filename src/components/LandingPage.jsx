@@ -35,14 +35,25 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
   const [nickname, setNickname] = useState('');
   const [roomId, setRoomId] = useState('');
   const [titleDone, setTitleDone] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // ── Particle Constellation System ─────────────────
   useEffect(() => {
+    if (window.innerWidth < 768) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    let lastWidth = window.innerWidth;
+    let lastWidth = 0;
     const resize = () => {
       // Only resize if width changes to prevent canvas thrashing when mobile keyboard pops up
       if (window.innerWidth !== lastWidth || !canvas.width) {
@@ -163,66 +174,87 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
     setMode(newMode);
   };
 
+  const panelVariants = {
+    initial: isMobile ? { opacity: 0 } : { opacity: 0, y: 40, scale: 0.95 },
+    animate: isMobile ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 },
+    exit: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.9 },
+  };
+
+  const panelTransition = isMobile 
+    ? { duration: 0.2, ease: "easeOut" } 
+    : { duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] };
+
   return (
-    <div className="relative w-full min-h-screen flex items-center justify-center overflow-hidden mesh-bg vignette">
+    <div className="relative w-full min-h-screen flex items-start md:items-center justify-center overflow-y-auto pt-10 pb-6 md:py-0 bg-transparent">
       {/* Particle Canvas */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 z-0 pointer-events-none"
-      />
+      {!isMobile && (
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 z-0 pointer-events-none"
+        />
+      )}
 
       {/* Ambient glow orbs (using radial gradients instead of expensive CSS blur filters) */}
-      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full animate-float pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(79, 70, 229, 0.12) 0%, transparent 60%)' }} />
-      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full animate-float-slow pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(236, 72, 153, 0.12) 0%, transparent 60%)' }} />
-      <div className="absolute top-1/2 left-1/2 w-[350px] h-[350px] rounded-full animate-float pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 60%)' }} />
+      <div className="hidden md:block absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full animate-float pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(79, 70, 229, 0.12) 0%, transparent 60%)' }} />
+      <div className="hidden md:block absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full animate-float-slow pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(236, 72, 153, 0.12) 0%, transparent 60%)' }} />
+      <div className="hidden md:block absolute top-1/2 left-1/2 w-[350px] h-[350px] rounded-full animate-float pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 60%)' }} />
 
       <motion.div
         className="glass-panel z-10 flex flex-col items-center max-w-xl w-full text-center px-8 py-12 md:px-12"
-        initial={{ opacity: 0, y: 40, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+        variants={panelVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={panelTransition}
       >
         {/* ── Typewriter Title ────────────────────── */}
         <div className="mb-2">
-          <motion.h1
-            className="text-4xl sm:text-5xl md:text-6xl font-space font-bold text-white leading-tight flex flex-wrap justify-center gap-x-[0.3em] gap-y-2"
-            initial="hidden"
-            animate="visible"
-          >
-            {titleText.split(' ').map((word, wordIndex, arr) => {
-              const previousCharsCount = arr.slice(0, wordIndex).reduce((sum, w) => sum + w.length + 1, 0);
-              return (
-                <span key={wordIndex} className="inline-block whitespace-nowrap">
-                  {word.split('').map((char, charIndex) => (
-                    <motion.span
-                      key={charIndex}
-                      custom={previousCharsCount + charIndex}
-                      variants={letterVariants}
-                      className="inline-block neon-text-primary"
-                    >
-                      {char}
-                    </motion.span>
-                  ))}
-                </span>
-              );
-            })}
-          </motion.h1>
+          {isMobile ? (
+            <h1 className="text-4xl sm:text-5xl font-space font-bold text-white leading-tight flex flex-wrap justify-center gap-x-[0.3em] gap-y-2">
+              <span className="neon-text-primary">{titleText}</span>
+            </h1>
+          ) : (
+            <>
+              <motion.h1
+                className="text-4xl sm:text-5xl md:text-6xl font-space font-bold text-white leading-tight flex flex-wrap justify-center gap-x-[0.3em] gap-y-2"
+                initial="hidden"
+                animate="visible"
+              >
+                {titleText.split(' ').map((word, wordIndex, arr) => {
+                  const previousCharsCount = arr.slice(0, wordIndex).reduce((sum, w) => sum + w.length + 1, 0);
+                  return (
+                    <span key={wordIndex} className="inline-block whitespace-nowrap">
+                      {word.split('').map((char, charIndex) => (
+                        <motion.span
+                          key={charIndex}
+                          custom={previousCharsCount + charIndex}
+                          variants={letterVariants}
+                          className="inline-block neon-text-primary"
+                        >
+                          {char}
+                        </motion.span>
+                      ))}
+                    </span>
+                  );
+                })}
+              </motion.h1>
 
-          {/* Blinking cursor */}
-          <motion.span
-            className="inline-block w-[3px] h-8 md:h-10 bg-brand-primary ml-1 align-middle"
-            animate={titleDone ? { opacity: [1, 0] } : { opacity: 1 }}
-            transition={titleDone ? { duration: 0.6, repeat: 4, repeatType: 'reverse' } : {}}
-            style={{ display: titleDone ? 'none' : undefined }}
-          />
+              {/* Blinking cursor */}
+              <motion.span
+                className="inline-block w-[3px] h-8 md:h-10 bg-brand-primary ml-1 align-middle"
+                animate={titleDone ? { opacity: [1, 0] } : { opacity: 1 }}
+                transition={titleDone ? { duration: 0.6, repeat: 4, repeatType: 'reverse' } : {}}
+                style={{ display: titleDone ? 'none' : undefined }}
+              />
+            </>
+          )}
         </div>
 
         <motion.p
           className="text-gray-400 font-inter text-sm md:text-base mb-8 tracking-wide"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.8, duration: 0.6 }}
+          transition={{ delay: isMobile ? 0.2 : 1.8, duration: 0.6 }}
         >
           Real-time multiplayer number guessing
         </motion.p>
@@ -232,16 +264,16 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
           {mode === 'menu' && (
             <motion.div
               key="menu"
-              initial={{ opacity: 0, y: 20 }}
+              initial={isMobile ? { opacity: 0 } : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              exit={isMobile ? { opacity: 0 } : { opacity: 0, y: -20 }}
+              transition={{ duration: isMobile ? 0.15 : 0.3 }}
               className="flex flex-col gap-4 w-full mt-4"
             >
               <motion.button
                 className="primary-btn text-lg py-4 font-space"
                 onClick={() => handleModeSwitch('create')}
-                whileHover={{ scale: 1.02 }}
+                whileHover={isMobile ? {} : { scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
                 ✨ Create New Room
@@ -249,7 +281,7 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
               <motion.button
                 className="gradient-border rounded-xl py-4 px-8 text-white font-space font-bold text-lg bg-dark-surface/50 hover:bg-dark-elevated/60 transition-colors"
                 onClick={() => handleModeSwitch('join')}
-                whileHover={{ scale: 1.02 }}
+                whileHover={isMobile ? {} : { scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
                 🚀 Join Existing Room
@@ -260,10 +292,10 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
           {mode === 'create' && (
             <motion.div
               key="create"
-              initial={{ opacity: 0, x: 60 }}
+              initial={isMobile ? { opacity: 0 } : { opacity: 0, x: 60 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -60 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
+              exit={isMobile ? { opacity: 0 } : { opacity: 0, x: -60 }}
+              transition={{ duration: isMobile ? 0.15 : 0.35, ease: 'easeOut' }}
               className="flex flex-col gap-4 w-full mt-4"
             >
               <div className="relative">
@@ -273,7 +305,7 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
                   className="input-field text-center text-lg font-space py-4"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
-                  autoFocus
+                  autoFocus={!isMobile}
                   maxLength={16}
                 />
                 {nickname && (
@@ -295,10 +327,10 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
                   ← Back
                 </motion.button>
                 <motion.button
-                  className="primary-btn flex-1 py-3.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className="primary-btn flex-1 py-3.5 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => nickname && onCreateRoom(nickname)}
                   disabled={!nickname}
-                  whileHover={nickname ? { scale: 1.02 } : {}}
+                  whileHover={nickname && !isMobile ? { scale: 1.02 } : {}}
                   whileTap={nickname ? { scale: 0.98 } : {}}
                 >
                   Create Room
@@ -310,10 +342,10 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
           {mode === 'join' && (
             <motion.div
               key="join"
-              initial={{ opacity: 0, x: -60 }}
+              initial={isMobile ? { opacity: 0 } : { opacity: 0, x: -60 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 60 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
+              exit={isMobile ? { opacity: 0 } : { opacity: 0, x: 60 }}
+              transition={{ duration: isMobile ? 0.15 : 0.35, ease: 'easeOut' }}
               className="flex flex-col gap-4 w-full mt-4"
             >
               <input
@@ -322,7 +354,7 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
                 className="input-field text-center text-lg font-space py-4"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                autoFocus
+                autoFocus={!isMobile}
                 maxLength={16}
               />
               <input
@@ -342,10 +374,10 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
                   ← Back
                 </motion.button>
                 <motion.button
-                  className="primary-btn flex-1 py-3.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className="primary-btn flex-1 py-3.5 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => nickname && roomId.length === 4 && onJoinRoom(nickname, roomId)}
                   disabled={!nickname || roomId.length !== 4}
-                  whileHover={nickname && roomId.length === 4 ? { scale: 1.02 } : {}}
+                  whileHover={nickname && roomId.length === 4 && !isMobile ? { scale: 1.02 } : {}}
                   whileTap={nickname && roomId.length === 4 ? { scale: 0.98 } : {}}
                 >
                   Join Room

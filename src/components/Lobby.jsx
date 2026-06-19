@@ -46,6 +46,16 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
   const [infoMode, setInfoMode] = useState(null);
   const [copied, setCopied] = useState(false);
   const [prevPlayerCount, setPrevPlayerCount] = useState(players.length);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     if (initialGameMode) setLocalMode(initialGameMode.toLowerCase());
@@ -86,15 +96,22 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
     if (setGameMode) setGameMode(mode.id.toLowerCase());
   };
 
+  const panelVariants = {
+    initial: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: 30 },
+    animate: isMobile ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 },
+    exit: isMobile ? { opacity: 0 } : { opacity: 0, scale: 1.05 },
+  };
+
   return (
-    <div className="w-full min-h-screen flex items-center justify-center p-4 md:p-6 mesh-bg vignette relative">
+    <div className="w-full min-h-screen flex items-start md:items-center justify-center p-4 md:p-6 pt-8 pb-8 md:py-6 bg-transparent relative overflow-y-auto">
 
       <motion.div
         className="glass-panel z-10 w-full max-w-4xl p-6 md:p-8"
-        initial={{ opacity: 0, scale: 0.92, y: 30 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 1.05 }}
-        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+        variants={panelVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={{ duration: isMobile ? 0.2 : 0.5, ease: "easeOut" }}
       >
         {/* ── Header ─────────────────────────────── */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-white/[0.06] pb-6">
@@ -113,11 +130,11 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
             <motion.button
               onClick={handleCopyRoomCode}
               className="group relative flex items-center gap-3 bg-dark-surface border border-white/10 hover:border-brand-primary/40 px-5 py-2.5 rounded-xl transition-all cursor-pointer"
-              whileHover={{ scale: 1.02 }}
+              whileHover={isMobile ? {} : { scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
               <span className="text-3xl md:text-4xl font-space font-bold text-white tracking-[0.25em]">
-                {roomId.split('').map((char, i) => (
+                {isMobile ? roomId : roomId.split('').map((char, i) => (
                   <motion.span
                     key={i}
                     initial={{ opacity: 0, y: -10 }}
@@ -184,11 +201,11 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
                 {players.map((player, index) => (
                   <motion.li
                     key={player}
-                    initial={{ opacity: 0, x: -30, scale: 0.9 }}
+                    initial={isMobile ? { opacity: 0 } : { opacity: 0, x: -30, scale: 0.9 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: 30 }}
-                    transition={{ delay: index * 0.05, duration: 0.3 }}
-                    layout
+                    exit={isMobile ? { opacity: 0 } : { opacity: 0, x: 30 }}
+                    transition={isMobile ? { duration: 0.15 } : { delay: index * 0.05, duration: 0.3 }}
+                    layout={!isMobile}
                     className="flex items-center gap-3 bg-dark-surface/60 p-3 rounded-xl border border-white/[0.06] hover:border-white/[0.12] transition-colors"
                   >
                     {/* Gradient Avatar with Pulse Dot */}
@@ -207,8 +224,8 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
 
                     {index === 0 && (
                       <motion.span
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
+                        initial={isMobile ? { opacity: 1 } : { scale: 0 }}
+                        animate={isMobile ? { opacity: 1 } : { scale: 1 }}
                         className="ml-auto text-[10px] bg-brand-gold/15 border border-brand-gold/30 text-brand-gold px-2.5 py-1 rounded-md font-space font-bold tracking-wider uppercase"
                       >
                         👑 Host
@@ -236,7 +253,7 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
                   <motion.div
                     key={mode.id}
                     onClick={() => handleSelectMode(mode)}
-                    whileHover={isHost ? { scale: 1.01 } : {}}
+                    whileHover={isHost && !isMobile ? { scale: 1.01 } : {}}
                     whileTap={isHost ? { scale: 0.99 } : {}}
                     className={`glow-card ${isSelected ? 'selected' : ''} w-full text-left p-4 ${
                       !isHost ? 'opacity-75' : 'cursor-pointer'
@@ -286,7 +303,7 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
                   className="primary-btn flex-1 py-3.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => { playClick(); onStartGame(); }}
                   disabled={players.length < 1}
-                  whileHover={players.length >= 1 ? { scale: 1.02 } : {}}
+                  whileHover={players.length >= 1 && !isMobile ? { scale: 1.02 } : {}}
                   whileTap={players.length >= 1 ? { scale: 0.98 } : {}}
                 >
                   🎮 Start Game

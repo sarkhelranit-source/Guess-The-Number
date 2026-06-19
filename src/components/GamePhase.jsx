@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { playGuessSubmit, playError, playClick } from '../services/soundManager';
 
@@ -16,6 +16,16 @@ function nameToGradient(name) {
 export default function GamePhase({ gameState, myNickname, onGuess, lastHint, roundResults }) {
   const [guess, setGuess] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const isElimination = gameState.gameMode === 'elimination';
   const isEliminated = isElimination && gameState.eliminated?.includes(myNickname);
@@ -58,8 +68,14 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
     return "Make Your Guess!";
   };
 
+  const panelVariants = {
+    initial: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.92 },
+    animate: isMobile ? { opacity: 1 } : { opacity: 1, scale: 1 },
+    exit: isMobile ? { opacity: 0 } : { opacity: 0, y: -50 },
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative mesh-bg vignette">
+    <div className="min-h-screen w-full flex flex-col items-start justify-start pt-6 pb-6 md:items-center md:justify-center md:p-4 relative bg-transparent overflow-y-auto">
       
       {/* Round Results Overlay for Elimination Mode */}
       <AnimatePresence>
@@ -116,9 +132,11 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
       </AnimatePresence>
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, y: -50 }}
+        variants={panelVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={{ duration: isMobile ? 0.2 : 0.4 }}
         className="glass-panel w-full max-w-4xl grid md:grid-cols-2 gap-6 md:gap-8 p-4 sm:p-6 md:p-8 z-10"
       >
         {/* Left Col: Game Info & Input */}
@@ -150,7 +168,7 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
                 onChange={(e) => setGuess(e.target.value)}
                 placeholder="?"
                 disabled={!isMyTurn}
-                autoFocus={isMyTurn}
+                autoFocus={isMyTurn && !isMobile}
               />
             </motion.div>
             
@@ -158,7 +176,7 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
               type="submit"
               className="primary-btn py-4 text-base font-space disabled:opacity-40 disabled:cursor-not-allowed"
               disabled={guess === '' || !isMyTurn}
-              whileHover={guess && isMyTurn ? { scale: 1.02 } : {}}
+              whileHover={guess && isMyTurn && !isMobile ? { scale: 1.02 } : {}}
               whileTap={guess && isMyTurn ? { scale: 0.98 } : {}}
             >
               Submit Guess
@@ -194,7 +212,7 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
               return (
                 <motion.div
                   key={i}
-                  layout
+                  layout={!isMobile}
                   className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
                     isCurrentTurn
                       ? 'bg-brand-primary/10 border-brand-primary/40'
