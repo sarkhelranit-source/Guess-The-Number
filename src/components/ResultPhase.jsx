@@ -129,9 +129,9 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
   return (
     <div className="min-h-screen flex items-center justify-center p-4 mesh-bg vignette relative">
 
-      {/* Winner glow aura */}
+      {/* Winner glow aura (optimized for mobile) */}
       {isWinner && !showReveal && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-gold/10 rounded-full blur-[150px] animate-pulse-glow pointer-events-none z-0" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full animate-pulse pointer-events-none z-0" style={{ background: 'radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 50%)' }} />
       )}
 
       <motion.div
