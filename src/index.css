@@ -210,7 +210,11 @@
       radial-gradient(ellipse at 90% 80%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
       #0a0e1a;
     background-size: 400% 400%;
-    animation: mesh-shift 15s ease-in-out infinite alternate;
+  }
+  @media (min-width: 768px) {
+    .mesh-bg {
+      animation: mesh-shift 15s ease-in-out infinite alternate;
+    }
   }
 
   /* ── Glow Card (for game mode cards, etc.) ────── */

@@ -20,10 +20,10 @@ const letterVariants = {
 
 // ── Deterministic color from index ──────────────────
 const PARTICLE_COLORS = [
-  'rgba(79, 70, 229, 0.3)',   // indigo
-  'rgba(236, 72, 153, 0.2)',   // pink
-  'rgba(6, 182, 212, 0.25)',   // cyan
-  'rgba(124, 58, 237, 0.2)',   // purple
+  '79, 70, 229',   // indigo
+  '236, 72, 153',  // pink
+  '6, 182, 212',   // cyan
+  '124, 58, 237',  // purple
 ];
 
 export default function LandingPage({ onCreateRoom, onJoinRoom }) {
@@ -111,7 +111,7 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }) {
         // Draw number text
         ctx.save();
         ctx.font = `${Math.round(p.radius * 6)}px "Space Grotesk", sans-serif`;
-        ctx.fillStyle = p.color.replace(/[\d.]+\)$/, `${currentAlpha})`);
+        ctx.fillStyle = `rgba(${p.color}, ${currentAlpha})`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(p.number, p.x, p.y);
