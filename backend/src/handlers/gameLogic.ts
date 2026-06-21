@@ -12,6 +12,13 @@ if (!process.env.GAMES_TABLE_NAME || !process.env.CONNECTIONS_TABLE_NAME) {
   throw new Error("Missing required environment variables: GAMES_TABLE_NAME or CONNECTIONS_TABLE_NAME");
 }
 
+class GameError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GameError';
+  }
+}
+
 const getPublicRoom = (room: any) => {
   if (!room) return room;
   const publicRoom = { ...room };
@@ -117,14 +124,14 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     } else if (action === 'joinRoom') {
       const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
-      if (!room) throw new Error('Room not found');
-      if (room.status !== 'waiting') throw new Error('Game already started');
+      if (!room) throw new GameError('Room not found');
+      if (room.status !== 'waiting') throw new GameError('Game already started');
 
       const safeName = (playerName || 'Guest').substring(0, 15).replace(/[^a-zA-Z0-9 ]/g, "");
 
       // Security: Ensure player name is unique in this room (case-insensitive)
       if (room.players.some((p: any) => p.name.toLowerCase() === safeName.toLowerCase())) {
-        throw new Error('Name already taken in this room');
+        throw new GameError('Name already taken in this room');
       }
 
       const newPlayer = { connectionId, sessionId, name: safeName, score: 0, isDisconnected: false };
@@ -146,10 +153,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     } else if (action === 'reconnect') {
       const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
-      if (!room) throw new Error('Room not found');
+      if (!room) throw new GameError('Room not found');
 
       const player = room.players.find((p: any) => p.sessionId === sessionId);
-      if (!player) throw new Error('Player not found in room');
+      if (!player) throw new GameError('Player not found in room');
 
       if (room.hostId === player.connectionId) {
         room.hostId = connectionId;
@@ -177,12 +184,12 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     } else if (action === 'startGame') {
       const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
-      if (!room || room.hostId !== connectionId) throw new Error('Unauthorized');
+      if (!room || room.hostId !== connectionId) throw new GameError('Unauthorized');
 
       room.status = 'playing';
       if (gameMode) {
         if (!['race', 'proximity', 'elimination'].includes(gameMode)) {
-          throw new Error('Invalid game mode');
+          throw new GameError('Invalid game mode');
         }
         room.gameMode = gameMode; // Store selected mode!
       }
@@ -209,7 +216,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     } else if (action === 'returnToLobby') {
       const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
-      if (!room || room.hostId !== connectionId) throw new Error('Unauthorized');
+      if (!room || room.hostId !== connectionId) throw new GameError('Unauthorized');
 
       room.status = 'waiting';
       delete room.winner;
@@ -227,11 +234,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     } else if (action === 'kickPlayer') {
       const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
-      if (!room) throw new Error('Room not found');
-      if (room.hostId !== connectionId) throw new Error('Unauthorized');
+      if (!room) throw new GameError('Room not found');
+      if (room.hostId !== connectionId) throw new GameError('Unauthorized');
 
       const kickedPlayer = room.players.find((p: any) => p.name === targetPlayerName);
-      if (!kickedPlayer) throw new Error('Player not found in room');
+      if (!kickedPlayer) throw new GameError('Player not found in room');
 
       // Remove player from the room list
       room.players = room.players.filter((p: any) => p.name !== targetPlayerName);
@@ -264,7 +271,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     } else if (action === 'rematchRequest') {
       const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
-      if (!room) throw new Error('Room not found');
+      if (!room) throw new GameError('Room not found');
 
       const host = room.players.find((p: any) => p.connectionId === room.hostId);
       if (host) {
@@ -273,10 +280,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     } else if (action === 'guess') {
       const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
-      if (!room || room.status !== 'playing') throw new Error('Game not active');
+      if (!room || room.status !== 'playing') throw new GameError('Game not active');
 
       const player = room.players.find((p: any) => p.connectionId === connectionId);
-      if (!player) throw new Error('Player not in room');
+      if (!player) throw new GameError('Player not in room');
 
       // Rate limit: Cooldown check (minimum 800ms between guesses)
       const now = Date.now();
@@ -426,7 +433,8 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     return { statusCode: 200, body: 'Processed' };
   } catch (error: any) {
     console.error('Logic error:', error);
-    await sendMessage(connectionId!, { type: 'error', message: error.message });
+    const clientMessage = error.name === 'GameError' ? error.message : 'An unexpected server error occurred.';
+    await sendMessage(connectionId!, { type: 'error', message: clientMessage });
     return { statusCode: 200, body: 'Error processed' }; 
   }
 };
