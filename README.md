@@ -193,19 +193,19 @@ The pipeline runs `npm run build`, syncs the `dist/` folder to S3, and invalidat
 
 ---
 
-## 💰 Cost Model
+## 💰 Cost Model (Paid Tier Account)
 
-This project is 100% serverless with pay-per-request pricing. **If no one is playing, the cost is $0.00.**
+This project is 100% serverless with pay-per-request pricing. **If no one is active, the cost is $0.00.** When active, costs are billed directly according to AWS paid tier rates:
 
-| Service | Always Free Tier | Estimated Monthly Cost |
+| Service | Paid Tier Pricing Metric | Estimated Monthly Cost (10,000 matches/month) |
 |---|---|---|
-| AWS Lambda | 1M requests/month | ~$0.00 |
-| DynamoDB | 25 GB + 2.5M read/write | ~$0.00 |
-| CloudFront | 1 TB transfer | ~$0.00 |
-| API Gateway | Pay-per-message | < $0.01 |
-| S3 | 5 GB storage | < $0.01 |
+| **AWS API Gateway** | Connection time: $1.00 / million minutes<br>Messages: $32.00 / billion | ~$0.15 |
+| **AWS Lambda** | Requests: $0.20 / million<br>Duration: $0.00001667 / GB-sec | ~$0.05 |
+| **Amazon DynamoDB** | Writes: $1.25 / million WRUs<br>Reads: $0.25 / million RRUs | ~$0.20 |
+| **Amazon S3 & CloudFront** | Storage: $0.023 / GB<br>Data Transfer: $0.085 / GB out | ~$0.05 |
 
-> For casual use with friends, the entire project runs comfortably within the AWS Free Tier.
+> **Summary**: Running this application in a standard paid tier AWS account without any Free Tier discount will cost **less than $0.50 per month** under casual to moderate usage with friends.
+
 
 ---
 
