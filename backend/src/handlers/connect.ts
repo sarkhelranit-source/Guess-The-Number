@@ -57,28 +57,30 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
         if (room) {
           const leavingPlayer = room.players.find((p: any) => p.connectionId === connectionId);
-          room.players = room.players.filter((p: any) => p.connectionId !== connectionId);
+          if (leavingPlayer) {
+            leavingPlayer.isDisconnected = true;
+          }
 
-          if (room.players.length === 0) {
+          const allDisconnected = room.players.every((p: any) => p.isDisconnected);
+
+          if (allDisconnected) {
             await docClient.send(new DeleteCommand({
               TableName: GAMES_TABLE,
               Key: { roomId }
             }));
           } else {
-            if (room.hostId === connectionId) {
-              room.hostId = room.players[0].connectionId;
-            }
-
             await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
             for (const p of room.players) {
-              try {
-                await apiGateway.send(new PostToConnectionCommand({
-                  ConnectionId: p.connectionId,
-                  Data: Buffer.from(JSON.stringify({ type: 'playerLeft', room: getPublicRoom(room), leftPlayer: leavingPlayer?.name }))
-                }));
-              } catch (e) {
-                // Ignore stale connection errors
+              if (!p.isDisconnected) {
+                try {
+                  await apiGateway.send(new PostToConnectionCommand({
+                    ConnectionId: p.connectionId,
+                    Data: Buffer.from(JSON.stringify({ type: 'gameUpdated', room: getPublicRoom(room) }))
+                  }));
+                } catch (e) {
+                  // Ignore stale connection errors
+                }
               }
             }
           }

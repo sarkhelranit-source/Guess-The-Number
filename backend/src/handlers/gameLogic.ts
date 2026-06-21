@@ -18,7 +18,7 @@ const getPublicRoom = (room: any) => {
   delete publicRoom.hostId; // Strip sensitive hostId
   if (publicRoom.players) {
     publicRoom.players = publicRoom.players.map((p: any) => {
-      const { connectionId, ...publicPlayer } = p; // Strip sensitive connectionId
+      const { connectionId, sessionId, ...publicPlayer } = p; // Strip sensitive connectionId and sessionId
       return publicPlayer;
     });
   }
@@ -39,7 +39,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     return { statusCode: 400, body: 'Invalid JSON' };
   }
 
-  const { action, roomId, playerName, guess, gameMode } = payload;
+  const { action, roomId, playerName, guess, gameMode, sessionId } = payload;
 
   const sendMessage = async (connId: string, data: any) => {
     try {
@@ -64,7 +64,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         roomId: newRoomId,
         hostId: connectionId,
         gameMode: gameMode || 'race', // 'race', 'proximity', 'elimination'
-        players: [{ connectionId, name: safeName, score: 0 }],
+        players: [{ connectionId, sessionId, name: safeName, score: 0, isDisconnected: false }],
         status: 'waiting', // waiting, playing, finished
         messages: [],
       };
@@ -85,7 +85,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       if (room.status !== 'waiting') throw new Error('Game already started');
 
       const safeName = (playerName || 'Guest').substring(0, 15).replace(/[^a-zA-Z0-9 ]/g, "");
-      const newPlayer = { connectionId, name: safeName, score: 0 };
+      const newPlayer = { connectionId, sessionId, name: safeName, score: 0, isDisconnected: false };
       room.players.push(newPlayer);
 
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
@@ -97,7 +97,40 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       }));
 
       for (const p of room.players) {
-        await sendMessage(p.connectionId, { type: 'playerJoined', room: getPublicRoom(room) });
+        if (!p.isDisconnected) {
+          await sendMessage(p.connectionId, { type: 'playerJoined', room: getPublicRoom(room) });
+        }
+      }
+
+    } else if (action === 'reconnect') {
+      const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
+      if (!room) throw new Error('Room not found');
+
+      const player = room.players.find((p: any) => p.sessionId === sessionId);
+      if (!player) throw new Error('Player not found in room');
+
+      if (room.hostId === player.connectionId) {
+        room.hostId = connectionId;
+      }
+      player.connectionId = connectionId;
+      player.isDisconnected = false;
+
+      await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+      await docClient.send(new UpdateCommand({
+        TableName: CONNECTIONS_TABLE,
+        Key: { connectionId },
+        UpdateExpression: 'set roomId = :r',
+        ExpressionAttributeValues: { ':r': roomId }
+      }));
+
+      // Notify the reconnected player of current game state
+      await sendMessage(connectionId!, { type: 'gameUpdated', room: getPublicRoom(room) });
+      
+      // Notify everyone else that the player is back online
+      for (const p of room.players) {
+        if (!p.isDisconnected && p.connectionId !== connectionId) {
+          await sendMessage(p.connectionId, { type: 'gameUpdated', room: getPublicRoom(room) });
+        }
       }
 
     } else if (action === 'startGame') {

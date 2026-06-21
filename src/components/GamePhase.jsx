@@ -13,7 +13,7 @@ function nameToGradient(name) {
   return `linear-gradient(135deg, hsl(${h1}, 75%, 55%), hsl(${h2}, 80%, 45%))`;
 }
 
-export default function GamePhase({ gameState, myNickname, onGuess, lastHint, roundResults }) {
+export default function GamePhase({ gameState, myNickname, onGuess, lastHint, roundResults, onLeave }) {
   const [guess, setGuess] = useState('');
   const [isShaking, setIsShaking] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -202,22 +202,37 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
 
         {/* Right Col: Feed & Status */}
         <div className="flex flex-col">
-          <h3 className="text-base font-space font-bold border-b border-white/[0.06] pb-2 mb-4 text-white">Players</h3>
+          <div className="flex justify-between items-center border-b border-white/[0.06] pb-2 mb-4">
+            <h3 className="text-base font-space font-bold text-white">Players</h3>
+            <button 
+              onClick={() => { playClick(); onLeave(); }} 
+              className="text-[10px] bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/20 px-2.5 py-1 rounded-md transition-colors uppercase tracking-widest font-space font-bold"
+            >
+              Leave Game
+            </button>
+          </div>
           <div className="flex flex-col gap-2.5 mb-6">
+            <AnimatePresence>
             {gameState.players.map((p, i) => {
               const isCurrentTurn = gameState.gameMode === 'proximity' && i === gameState.currentTurnIndex;
               const isPlayerEliminated = isElimination && gameState.eliminated?.includes(p.name);
               const hasPlayerGuessed = isElimination && gameState.roundGuesses?.[p.name] !== undefined;
+              const isDisconnected = p.isDisconnected;
+
+              if (isDisconnected) return null;
 
               return (
                 <motion.div
-                  key={i}
+                  key={p.name}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
                   layout={!isMobile}
                   className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                    isCurrentTurn
+                    isCurrentTurn && !isDisconnected
                       ? 'bg-brand-primary/10 border-brand-primary/40'
                       : 'bg-dark-surface/40 border-white/[0.06]'
-                  } ${isPlayerEliminated ? 'opacity-40 grayscale' : ''}`}
+                  } ${(isPlayerEliminated || isDisconnected) ? 'opacity-40 grayscale' : ''}`}
                 >
                   <div className="relative">
                     <div
@@ -236,28 +251,34 @@ export default function GamePhase({ gameState, myNickname, onGuess, lastHint, ro
                       <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-dark-bg" />
                     )}
                   </div>
-                  <span className={`text-sm font-inter font-medium ${isPlayerEliminated ? 'text-gray-600 line-through' : 'text-white'}`}>
+                  <span className={`text-sm font-inter font-medium ${(isPlayerEliminated || isDisconnected) ? 'text-gray-600' : 'text-white'} ${isPlayerEliminated ? 'line-through' : ''}`}>
                     {p.name} {p.name === myNickname ? '(You)' : ''}
                   </span>
                   
-                  {isPlayerEliminated && (
+                  {isDisconnected && (
+                    <span className="ml-auto text-[10px] bg-red-500/15 border border-red-500/30 text-red-400 px-2 py-0.5 rounded-md font-space font-bold uppercase">
+                      Offline
+                    </span>
+                  )}
+                  {isPlayerEliminated && !isDisconnected && (
                     <span className="ml-auto text-[10px] text-red-500 font-space font-bold uppercase tracking-widest">💀 Dead</span>
                   )}
-                  {isElimination && !isPlayerEliminated && hasPlayerGuessed && (
+                  {isElimination && !isPlayerEliminated && hasPlayerGuessed && !isDisconnected && (
                     <span className="ml-auto text-[10px] text-brand-secondary font-space font-bold uppercase tracking-widest">🔒 Locked</span>
                   )}
-                  {isElimination && !isPlayerEliminated && !hasPlayerGuessed && (
+                  {isElimination && !isPlayerEliminated && !hasPlayerGuessed && !isDisconnected && (
                     <span className="ml-auto text-[10px] text-gray-500 font-space font-bold uppercase tracking-widest animate-pulse">Thinking...</span>
                   )}
-                  {gameState.gameMode === 'proximity' && isCurrentTurn && (
+                  {gameState.gameMode === 'proximity' && isCurrentTurn && !isDisconnected && (
                     <span className="ml-auto text-[10px] text-brand-primary font-space font-bold uppercase tracking-widest animate-pulse">Thinking...</span>
                   )}
-                  {gameState.gameMode === 'race' && (
+                  {gameState.gameMode === 'race' && !isDisconnected && (
                     <span className="ml-auto text-[10px] text-brand-accent font-space bg-brand-accent/10 px-2 py-0.5 rounded-md border border-brand-accent/20">Racing...</span>
                   )}
                 </motion.div>
               );
             })}
+            </AnimatePresence>
           </div>
 
           {/* Live Feed for Proximity Mode */}

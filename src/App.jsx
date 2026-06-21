@@ -54,27 +54,84 @@ function App() {
   const [roundResults, setRoundResults] = useState(null);
   const [lastTarget, setLastTarget] = useState(null);
 
-  // Use a ref to track phase inside callbacks to avoid stale closures
+  const [sessionId, setSessionId] = useState('');
+  const sessionIdRef = useRef('');
+  const nicknameRef = useRef('');
+
+  // Use refs to track state inside callbacks to avoid stale closures
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
 
   const isHost = gameState?.players?.[0]?.name === nickname;
 
-  // Subscribe to WebSocket events ONCE on mount — no [phase] dependency
+  // Session recovery on mount
+  useEffect(() => {
+    const sessionStr = sessionStorage.getItem('gtn_session');
+    if (sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr);
+        if (session.sessionId && session.roomId && session.nickname) {
+          setNickname(session.nickname);
+          setRoomId(session.roomId);
+          setSessionId(session.sessionId);
+          
+          wsService.connect(
+            WS_URL,
+            () => {
+              wsService.send({ 
+                action: 'reconnect', 
+                roomId: session.roomId, 
+                sessionId: session.sessionId 
+              });
+            },
+            (err) => {
+              console.error('Reconnect failed', err);
+              sessionStorage.removeItem('gtn_session');
+            },
+            () => {
+              if (phaseRef.current !== 'landing') {
+                setError('Disconnected from server.');
+                setPhase('landing');
+              }
+            }
+          );
+        }
+      } catch (e) {
+        sessionStorage.removeItem('gtn_session');
+      }
+    }
+  }, []);
+
+  // Subscribe to WebSocket events ONCE on mount
   useEffect(() => {
     const unsubCreated = wsService.on('roomCreated', (data) => {
       setRoomId(data.room.roomId);
       setGameState(data.room);
       setPhase('lobby');
       setError('');
+      if (sessionIdRef.current && nicknameRef.current) {
+        sessionStorage.setItem('gtn_session', JSON.stringify({
+          sessionId: sessionIdRef.current,
+          roomId: data.room.roomId,
+          nickname: nicknameRef.current
+        }));
+      }
     });
 
     const unsubJoined = wsService.on('playerJoined', (data) => {
       setRoomId(data.room.roomId);
       setGameState(data.room);
-      // Use ref to read current phase without stale closure
       if (phaseRef.current === 'landing') setPhase('lobby');
       setError('');
+      if (sessionIdRef.current && nicknameRef.current) {
+        sessionStorage.setItem('gtn_session', JSON.stringify({
+          sessionId: sessionIdRef.current,
+          roomId: data.room.roomId,
+          nickname: nicknameRef.current
+        }));
+      }
     });
 
     const unsubStarted = wsService.on('gameStarted', (data) => {
@@ -84,7 +141,24 @@ function App() {
     });
 
     const unsubUpdated = wsService.on('gameUpdated', (data) => {
-      setGameState(data.room);
+      setGameState(prev => {
+        if (prev && prev.players) {
+          const newlyDisconnected = data.room.players.find(p => 
+            p.isDisconnected && !prev.players.find(oldP => oldP.name === p.name)?.isDisconnected
+          );
+          if (newlyDisconnected) {
+            setToastMessage(`${DOMPurify.sanitize(newlyDisconnected.name)} left the game.`);
+            setTimeout(() => setToastMessage(''), 3000);
+          }
+        }
+        return data.room;
+      });
+      // If we are currently on landing (just reconnected), put us in correct phase
+      if (phaseRef.current === 'landing') {
+        if (data.room.status === 'playing') setPhase('playing');
+        else if (data.room.status === 'waiting') setPhase('lobby');
+        else if (data.room.status === 'finished') setPhase('result');
+      }
     });
 
     const unsubHint = wsService.on('guessResult', (data) => {
@@ -149,14 +223,16 @@ function App() {
   }, []); // <-- Empty dependency: subscribe once, unsubscribe on unmount
 
   const connectAndJoin = (name, action, roomCode = null) => {
+    const newSessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    setSessionId(newSessionId);
     setNickname(name);
     wsService.connect(
       WS_URL,
       () => {
         if (action === 'createRoom') {
-          wsService.send({ action: 'createRoom', playerName: name, gameMode: 'race' });
+          wsService.send({ action: 'createRoom', playerName: name, gameMode: 'race', sessionId: newSessionId });
         } else {
-          wsService.send({ action: 'joinRoom', roomId: roomCode, playerName: name });
+          wsService.send({ action: 'joinRoom', roomId: roomCode, playerName: name, sessionId: newSessionId });
         }
       },
       (err) => setError('Failed to connect to server. Check your WebSocket URL!'),
@@ -182,6 +258,8 @@ function App() {
   };
 
   const handleLeaveRoom = () => {
+    sessionStorage.removeItem('gtn_session');
+    setSessionId('');
     wsService.disconnect();
     setPhase('landing');
     setGameState(null);
@@ -258,7 +336,10 @@ function App() {
         {phase === 'lobby' && gameState && (
           <motion.div key="lobby" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="absolute inset-0">
             <Lobby 
-              players={gameState.players.map(p => DOMPurify.sanitize(p.name))} 
+              players={gameState.players.map(p => ({
+                name: DOMPurify.sanitize(p.name),
+                isDisconnected: p.isDisconnected
+              }))} 
               roomId={roomId} 
               isHost={isHost} 
               gameMode={gameState.gameMode} 
@@ -277,6 +358,7 @@ function App() {
               onGuess={handleGuess}
               lastHint={lastHint}
               roundResults={roundResults}
+              onLeave={handleLeaveRoom}
             />
           </motion.div>
         )}

@@ -198,28 +198,30 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
             </h3>
             <ul className="space-y-2.5">
               <AnimatePresence>
-                {players.map((player, index) => (
+                {players.map((player, index) => {
+                  if (player.isDisconnected) return null;
+                  return (
                   <motion.li
-                    key={player}
+                    key={player.name}
                     initial={isMobile ? { opacity: 0 } : { opacity: 0, x: -30, scale: 0.9 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
                     exit={isMobile ? { opacity: 0 } : { opacity: 0, x: 30 }}
                     transition={isMobile ? { duration: 0.15 } : { delay: index * 0.05, duration: 0.3 }}
                     layout={!isMobile}
-                    className="flex items-center gap-3 bg-dark-surface/60 p-3 rounded-xl border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+                    className="flex items-center gap-3 bg-dark-surface/60 p-3 rounded-xl border transition-colors border-white/[0.06] hover:border-white/[0.12]"
                   >
                     {/* Gradient Avatar with Pulse Dot */}
                     <div className="relative pulse-dot">
                       <div
                         className="w-10 h-10 rounded-full flex items-center justify-center text-white font-space font-bold text-base shadow-lg"
-                        style={{ background: nameToGradient(player) }}
+                        style={{ background: nameToGradient(player.name) }}
                       >
-                        {player.charAt(0).toUpperCase()}
+                        {player.name.charAt(0).toUpperCase()}
                       </div>
                     </div>
 
                     <span className="text-base text-white font-inter font-medium">
-                      {player}
+                      {player.name}
                     </span>
 
                     {index === 0 && (
@@ -232,7 +234,7 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
                       </motion.span>
                     )}
                   </motion.li>
-                ))}
+                )})}
               </AnimatePresence>
 
               {players.length === 0 && (
