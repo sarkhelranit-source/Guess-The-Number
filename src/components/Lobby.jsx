@@ -41,7 +41,7 @@ const gameModes = [
   },
 ];
 
-export default function Lobby({ players, roomId, isHost, gameMode: initialGameMode, setGameMode, onStartGame, onLeave, onKick }) {
+export default function Lobby({ players, roomId, isHost, gameMode: initialGameMode, setGameMode, onStartGame, onLeave, onKick, hostName }) {
   const [localMode, setLocalMode] = useState(initialGameMode?.toLowerCase() || 'race');
   const [infoMode, setInfoMode] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -224,7 +224,7 @@ export default function Lobby({ players, roomId, isHost, gameMode: initialGameMo
                       {player.name}
                     </span>
 
-                    {index === 0 ? (
+                    {player.name === hostName ? (
                       <motion.span
                         initial={isMobile ? { opacity: 1 } : { scale: 0 }}
                         animate={isMobile ? { opacity: 1 } : { scale: 1 }}

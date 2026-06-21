@@ -15,12 +15,15 @@ if (!process.env.GAMES_TABLE_NAME || !process.env.CONNECTIONS_TABLE_NAME) {
 const getPublicRoom = (room: any) => {
   if (!room) return room;
   const publicRoom = { ...room };
+  // Find host's nickname before stripping hostId
+  const hostPlayer = publicRoom.players?.find((p: any) => p.connectionId === publicRoom.hostId);
+  publicRoom.hostName = hostPlayer ? hostPlayer.name : (publicRoom.players?.[0]?.name || '');
   delete publicRoom.hostId; // Strip sensitive hostId
   delete publicRoom.roundTarget; // Prevent elimination target leak
   delete publicRoom.roundGuesses; // Prevent peeking at active round guesses
   if (publicRoom.players) {
     publicRoom.players = publicRoom.players.map((p: any) => {
-      const { connectionId, sessionId, target, ...publicPlayer } = p; // Strip sensitive connectionId, sessionId, and target
+      const { connectionId, sessionId, target, lastGuessedAt, ...publicPlayer } = p; // Strip sensitive connectionId, sessionId, target, and cooldowns
       return publicPlayer;
     });
   }
@@ -177,7 +180,12 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       if (!room || room.hostId !== connectionId) throw new Error('Unauthorized');
 
       room.status = 'playing';
-      if (gameMode) room.gameMode = gameMode; // Store selected mode!
+      if (gameMode) {
+        if (!['race', 'proximity', 'elimination'].includes(gameMode)) {
+          throw new Error('Invalid game mode');
+        }
+        room.gameMode = gameMode; // Store selected mode!
+      }
       room.currentTurnIndex = 0;
       room.messages = [];
       delete room.winner; // Cleanup stale winner state
@@ -269,6 +277,14 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
       const player = room.players.find((p: any) => p.connectionId === connectionId);
       if (!player) throw new Error('Player not in room');
+
+      // Rate limit: Cooldown check (minimum 800ms between guesses)
+      const now = Date.now();
+      if (player.lastGuessedAt && now - player.lastGuessedAt < 800) {
+        await sendMessage(connectionId!, { type: 'error', message: "Slow down! You are guessing too fast." });
+        return { statusCode: 200, body: 'Rate limited' };
+      }
+      player.lastGuessedAt = now;
 
       const num = parseInt(guess);
       if (isNaN(num)) {

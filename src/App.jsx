@@ -64,7 +64,7 @@ function App() {
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
 
-  const isHost = gameState?.players?.[0]?.name === nickname;
+  const isHost = gameState?.hostName === nickname;
 
   // Session recovery on mount
   useEffect(() => {
@@ -367,6 +367,7 @@ function App() {
               onStartGame={handleStartGame} 
               onLeave={handleLeaveRoom}
               onKick={handleKickPlayer}
+              hostName={gameState.hostName}
             />
           </motion.div>
         )}

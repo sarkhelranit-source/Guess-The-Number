@@ -15,12 +15,15 @@ if (!process.env.GAMES_TABLE_NAME || !process.env.CONNECTIONS_TABLE_NAME) {
 const getPublicRoom = (room: any) => {
   if (!room) return room;
   const publicRoom = { ...room };
+  // Find host's nickname before stripping hostId
+  const hostPlayer = publicRoom.players?.find((p: any) => p.connectionId === publicRoom.hostId);
+  publicRoom.hostName = hostPlayer ? hostPlayer.name : (publicRoom.players?.[0]?.name || '');
   delete publicRoom.hostId; // Strip sensitive hostId
   delete publicRoom.roundTarget; // Prevent elimination target leak
   delete publicRoom.roundGuesses; // Prevent peeking at active round guesses
   if (publicRoom.players) {
     publicRoom.players = publicRoom.players.map((p: any) => {
-      const { connectionId, sessionId, target, ...publicPlayer } = p; // Strip sensitive connectionId, sessionId, and target
+      const { connectionId, sessionId, target, lastGuessedAt, ...publicPlayer } = p; // Strip sensitive connectionId, sessionId, target, and cooldowns
       return publicPlayer;
     });
   }
@@ -58,12 +61,18 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         }));
 
         if (room) {
-          const leavingPlayer = room.players.find((p: any) => p.connectionId === connectionId);
-          if (leavingPlayer) {
-            leavingPlayer.isDisconnected = true;
+          if (room.status === 'waiting') {
+            // Clean Lobby Disconnect: Remove player completely if game hasn't started yet
+            room.players = room.players.filter((p: any) => p.connectionId !== connectionId);
+          } else {
+            // Mark as disconnected if game has started
+            const leavingPlayer = room.players.find((p: any) => p.connectionId === connectionId);
+            if (leavingPlayer) {
+              leavingPlayer.isDisconnected = true;
+            }
           }
 
-          const allDisconnected = room.players.every((p: any) => p.isDisconnected);
+          const allDisconnected = room.players.length === 0 || room.players.every((p: any) => p.isDisconnected);
 
           if (allDisconnected) {
             await docClient.send(new DeleteCommand({
@@ -71,6 +80,14 @@ export const handler: APIGatewayProxyHandler = async (event) => {
               Key: { roomId }
             }));
           } else {
+            // Host Promotion: Promote another active player to host if current host leaves
+            if (room.hostId === connectionId) {
+              const activePlayer = room.players.find((p: any) => !p.isDisconnected);
+              if (activePlayer) {
+                room.hostId = activePlayer.connectionId;
+              }
+            }
+
             await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
             for (const p of room.players) {
