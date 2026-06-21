@@ -17,7 +17,7 @@ function nameToGradient(name) {
 export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, onBackToRoom, target, gameMode }) {
   const isWinner = winner === myNickname;
   const [waitingForHost, setWaitingForHost] = useState(false);
-  const [showReveal, setShowReveal] = useState(!!target && gameMode === 'elimination');
+  const [showReveal, setShowReveal] = useState(false);
   const [counterValue, setCounterValue] = useState(0);
   const [counterDone, setCounterDone] = useState(false);
   const confettiFired = useRef(false);
@@ -45,7 +45,7 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
   // ── Number counter animation ──────────────────────
   useEffect(() => {
     if (showReveal || !target) return;
-    
+
     const targetNum = parseInt(target);
     if (isNaN(targetNum)) {
       setCounterValue(target);
@@ -57,7 +57,7 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
     const startTime = Date.now();
     const tickInterval = 80;
     let lastTick = 0;
-    
+
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
@@ -240,9 +240,8 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
-                className={`text-4xl md:text-5xl font-space font-bold mb-5 ${
-                  isWinner ? 'text-brand-gold neon-text-gold' : 'text-white'
-                }`}
+                className={`text-4xl md:text-5xl font-space font-bold mb-5 ${isWinner ? 'text-brand-gold neon-text-gold' : 'text-white'
+                  }`}
               >
                 {isWinner ? "You Won!" : `${winner} Wins!`}
               </motion.h2>
@@ -307,9 +306,8 @@ export default function ResultPhase({ winner, myNickname, isHost, onPlayAgain, o
                 <motion.button
                   onClick={handlePlayAgain}
                   disabled={waitingForHost}
-                  className={`primary-btn py-3.5 px-8 text-base font-space ${
-                    waitingForHost ? 'opacity-40 cursor-not-allowed' : 'animate-pulse-glow'
-                  }`}
+                  className={`primary-btn py-3.5 px-8 text-base font-space ${waitingForHost ? 'opacity-40 cursor-not-allowed' : 'animate-pulse-glow'
+                    }`}
                   whileHover={!waitingForHost && !isMobile ? { scale: 1.03 } : {}}
                   whileTap={!waitingForHost ? { scale: 0.97 } : {}}
                 >

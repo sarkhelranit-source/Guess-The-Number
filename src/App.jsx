@@ -153,6 +153,12 @@ function App() {
         }
         return data.room;
       });
+      if (data.room.status === 'finished') {
+        if (data.room.winner) setWinner(DOMPurify.sanitize(data.room.winner));
+        const target = data.room.gameMode === 'elimination' ? data.room.roundTarget : data.room.players?.[0]?.target;
+        if (target !== undefined && target !== null) setLastTarget(target);
+      }
+
       // If we are currently on landing (just reconnected), put us in correct phase
       if (phaseRef.current === 'landing') {
         if (data.room.status === 'playing') setPhase('playing');
