@@ -16,9 +16,11 @@ const getPublicRoom = (room: any) => {
   if (!room) return room;
   const publicRoom = { ...room };
   delete publicRoom.hostId; // Strip sensitive hostId
+  delete publicRoom.roundTarget; // Prevent elimination target leak
+  delete publicRoom.roundGuesses; // Prevent peeking at active round guesses
   if (publicRoom.players) {
     publicRoom.players = publicRoom.players.map((p: any) => {
-      const { connectionId, sessionId, ...publicPlayer } = p; // Strip sensitive connectionId and sessionId
+      const { connectionId, sessionId, target, ...publicPlayer } = p; // Strip sensitive connectionId, sessionId, and target
       return publicPlayer;
     });
   }
@@ -32,6 +34,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
   if (!event.body) return { statusCode: 400, body: 'Missing body' };
   
+  // Security: Prevent DDoS and memory bloat from massive payloads
+  if (event.body.length > 2000) {
+    return { statusCode: 413, body: 'Payload too large' };
+  }
+
   let payload;
   try {
     payload = JSON.parse(event.body);
@@ -40,6 +47,17 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   }
 
   const { action, roomId, playerName, guess, gameMode, sessionId } = payload;
+
+  // Security: Enforce string length limits on inputs
+  if (
+    (roomId && typeof roomId === 'string' && roomId.length > 50) ||
+    (action && typeof action === 'string' && action.length > 50) ||
+    (guess && typeof guess === 'string' && guess.length > 50) ||
+    (gameMode && typeof gameMode === 'string' && gameMode.length > 50) ||
+    (sessionId && typeof sessionId === 'string' && sessionId.length > 100)
+  ) {
+    return { statusCode: 400, body: 'Input exceeds maximum length' };
+  }
 
   const sendMessage = async (connId: string, data: any) => {
     try {
@@ -141,12 +159,14 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       if (gameMode) room.gameMode = gameMode; // Store selected mode!
       room.currentTurnIndex = 0;
       room.messages = [];
+      delete room.winner; // Cleanup stale winner state
 
       // Assign target numbers
       if (room.gameMode === 'elimination') {
         room.roundTarget = Math.floor(Math.random() * 100) + 1;
         room.eliminated = [];
         room.roundGuesses = {};
+        room.players.forEach((p: any) => delete p.target); // Cleanup stale target from previous modes
       } else {
         const commonTarget = Math.floor(Math.random() * 100) + 1;
         room.players.forEach((p: any) => p.target = commonTarget);
@@ -164,9 +184,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
       room.status = 'waiting';
       delete room.winner;
+      delete room.roundTarget;
       room.messages = [];
       room.eliminated = [];
       room.roundGuesses = {};
+      room.players.forEach((p: any) => delete p.target);
 
       await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
 
