@@ -209,6 +209,15 @@ function App() {
       }, 5000);
     });
 
+    const unsubKicked = wsService.on('kicked', () => {
+      sessionStorage.removeItem('gtn_session');
+      setSessionId('');
+      wsService.disconnect();
+      setPhase('landing');
+      setGameState(null);
+      setError('You have been kicked from the room.');
+    });
+
     const unsubError = wsService.on('error', (data) => {
       setError(data.message);
     });
@@ -224,6 +233,7 @@ function App() {
       unsubReturnedToLobby();
       unsubPlayerLeft();
       unsubRoundEnded();
+      unsubKicked();
       unsubError();
     };
   }, []); // <-- Empty dependency: subscribe once, unsubscribe on unmount
@@ -269,6 +279,10 @@ function App() {
     wsService.disconnect();
     setPhase('landing');
     setGameState(null);
+  };
+
+  const handleKickPlayer = (targetName) => {
+    wsService.send({ action: 'kickPlayer', roomId, targetPlayerName: targetName });
   };
 
   const handleBackToRoom = () => {
@@ -352,6 +366,7 @@ function App() {
               setGameMode={handleSetGameMode}
               onStartGame={handleStartGame} 
               onLeave={handleLeaveRoom}
+              onKick={handleKickPlayer}
             />
           </motion.div>
         )}

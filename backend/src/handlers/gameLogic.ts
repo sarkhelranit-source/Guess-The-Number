@@ -46,15 +46,30 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     return { statusCode: 400, body: 'Invalid JSON' };
   }
 
-  const { action, roomId, playerName, guess, gameMode, sessionId } = payload;
+  const { action, roomId, playerName, guess, gameMode, sessionId, targetPlayerName } = payload;
+
+  // Security: Enforce string type checks on all parameters if they are provided
+  if (
+    (action && typeof action !== 'string') ||
+    (roomId && typeof roomId !== 'string') ||
+    (playerName && typeof playerName !== 'string') ||
+    (guess && typeof guess !== 'string') ||
+    (gameMode && typeof gameMode !== 'string') ||
+    (sessionId && typeof sessionId !== 'string') ||
+    (targetPlayerName && typeof targetPlayerName !== 'string')
+  ) {
+    return { statusCode: 400, body: 'Invalid input type' };
+  }
 
   // Security: Enforce string length limits on inputs
   if (
-    (roomId && typeof roomId === 'string' && roomId.length > 50) ||
-    (action && typeof action === 'string' && action.length > 50) ||
-    (guess && typeof guess === 'string' && guess.length > 50) ||
-    (gameMode && typeof gameMode === 'string' && gameMode.length > 50) ||
-    (sessionId && typeof sessionId === 'string' && sessionId.length > 100)
+    (roomId && roomId.length > 50) ||
+    (action && action.length > 50) ||
+    (guess && guess.length > 50) ||
+    (gameMode && gameMode.length > 50) ||
+    (sessionId && sessionId.length > 100) ||
+    (playerName && playerName.length > 50) ||
+    (targetPlayerName && targetPlayerName.length > 50)
   ) {
     return { statusCode: 400, body: 'Input exceeds maximum length' };
   }
@@ -103,6 +118,12 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       if (room.status !== 'waiting') throw new Error('Game already started');
 
       const safeName = (playerName || 'Guest').substring(0, 15).replace(/[^a-zA-Z0-9 ]/g, "");
+
+      // Security: Ensure player name is unique in this room (case-insensitive)
+      if (room.players.some((p: any) => p.name.toLowerCase() === safeName.toLowerCase())) {
+        throw new Error('Name already taken in this room');
+      }
+
       const newPlayer = { connectionId, sessionId, name: safeName, score: 0, isDisconnected: false };
       room.players.push(newPlayer);
 
@@ -194,6 +215,43 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
       for (const p of room.players) {
         await sendMessage(p.connectionId, { type: 'returnedToLobby', room: getPublicRoom(room) });
+      }
+
+    } else if (action === 'kickPlayer') {
+      const { Item: room } = await docClient.send(new GetCommand({ TableName: GAMES_TABLE, Key: { roomId } }));
+      if (!room) throw new Error('Room not found');
+      if (room.hostId !== connectionId) throw new Error('Unauthorized');
+
+      const kickedPlayer = room.players.find((p: any) => p.name === targetPlayerName);
+      if (!kickedPlayer) throw new Error('Player not found in room');
+
+      // Remove player from the room list
+      room.players = room.players.filter((p: any) => p.name !== targetPlayerName);
+
+      // Save room changes
+      await docClient.send(new PutCommand({ TableName: GAMES_TABLE, Item: room }));
+
+      // Clean up kicked player's room mapping in connections table so they aren't part of this room anymore
+      if (kickedPlayer.connectionId) {
+        try {
+          await docClient.send(new UpdateCommand({
+            TableName: CONNECTIONS_TABLE,
+            Key: { connectionId: kickedPlayer.connectionId },
+            UpdateExpression: 'remove roomId'
+          }));
+        } catch (e) {
+          console.error('Failed to remove roomId from connection:', e);
+        }
+
+        // Notify the kicked player specifically
+        await sendMessage(kickedPlayer.connectionId, { type: 'kicked' });
+      }
+
+      // Notify the remaining players
+      for (const p of room.players) {
+        if (!p.isDisconnected) {
+          await sendMessage(p.connectionId, { type: 'playerLeft', room: getPublicRoom(room), leftPlayer: targetPlayerName });
+        }
       }
 
     } else if (action === 'rematchRequest') {
