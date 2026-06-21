@@ -15,10 +15,12 @@ if (!process.env.GAMES_TABLE_NAME || !process.env.CONNECTIONS_TABLE_NAME) {
 const getPublicRoom = (room: any) => {
   if (!room) return room;
   const publicRoom = { ...room };
-  delete publicRoom.hostId;
+  delete publicRoom.hostId; // Strip sensitive hostId
+  delete publicRoom.roundTarget; // Prevent elimination target leak
+  delete publicRoom.roundGuesses; // Prevent peeking at active round guesses
   if (publicRoom.players) {
     publicRoom.players = publicRoom.players.map((p: any) => {
-      const { connectionId, ...publicPlayer } = p;
+      const { connectionId, sessionId, target, ...publicPlayer } = p; // Strip sensitive connectionId, sessionId, and target
       return publicPlayer;
     });
   }
