@@ -293,6 +293,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       }
       player.lastGuessedAt = now;
 
+      if (!/^-?\d+$/.test(guess)) {
+        await sendMessage(connectionId!, { type: 'error', message: "Invalid guess! Must be a number." });
+        return { statusCode: 200, body: 'Invalid guess' };
+      }
+
       const num = parseInt(guess);
       if (isNaN(num)) {
         await sendMessage(connectionId!, { type: 'error', message: "Invalid guess! Must be a number." });
